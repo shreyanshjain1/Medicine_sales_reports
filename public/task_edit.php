@@ -67,6 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $attendees = post('attendees', []);
   if (!is_array($attendees)) $attendees = [];
 
+<<<<<<< HEAD
+=======
+  $attendees = post('attendees', []);
+  if (!is_array($attendees)) $attendees = [];
+
+>>>>>>> 37d1d03e21f7806a028237f4c9fce390fa63d02d
   if ($city === '') $errors[] = 'City is required.';
   if ($start === '') $errors[] = 'Start date/time is required.';
 
@@ -133,10 +139,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       if ($stmt->execute()) {
         // Update attendees (best-effort)
+<<<<<<< HEAD
         $mysqli->query("CREATE TABLE IF NOT EXISTS event_attendees ( event_id INT NOT NULL, user_id INT NOT NULL, added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(event_id,user_id), INDEX(user_id) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         $eid = (int)$ev['id'];
         $mysqli->query("DELETE FROM event_attendees WHERE event_id=".$eid);
         if (!empty($attendees)) {
+=======
+        if (!empty($attendees)) {
+          $mysqli->query("CREATE TABLE IF NOT EXISTS event_attendees ( event_id INT NOT NULL, user_id INT NOT NULL, added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(event_id,user_id), INDEX(user_id) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+          $eid = (int)$ev['id'];
+          $mysqli->query("DELETE FROM event_attendees WHERE event_id=".$eid);
+>>>>>>> 37d1d03e21f7806a028237f4c9fce390fa63d02d
           $stmtA = $mysqli->prepare("INSERT IGNORE INTO event_attendees (event_id,user_id) VALUES (?,?)");
           if ($stmtA) {
             foreach ($attendees as $aidRaw) {
