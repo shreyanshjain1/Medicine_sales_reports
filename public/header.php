@@ -54,8 +54,8 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
     <?php if (is_manager()): ?>
       <a class="<?= $active==='admin_tasks.php'?'active':'' ?>" href="<?= url('admin_tasks.php') ?>">Tasks</a>
       <a class="<?= in_array($active,['admin_users.php','user_add.php','user_edit.php'])?'active':'' ?>" href="<?= url('admin_users.php') ?>">Users</a>
+      <a class="<?= in_array($active,['doctors_master.php','hospitals_master.php','medicines_master.php'])?'active':'' ?>" href="<?= url('doctors_master.php') ?>">Masters</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Exports</a>
-      <a class="<?= $active==='activity_logs.php'?'active':'' ?>" href="<?= url('activity_logs.php') ?>">Activity</a>
     <?php endif; ?>
     <a class="<?= $active==='profile.php'?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
     <a href="<?= url('logout.php') ?>" class="danger">Logout</a>
@@ -140,6 +140,11 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <div class="stack">
         <a class="btn block" href="<?= url('reports.php') ?>">Open Reports</a>
         <a class="btn block primary" href="<?= url('report_add.php') ?>">Create Report</a>
+        <?php if (is_manager()): ?>
+          <a class="btn block" href="<?= url('doctors_master.php') ?>">Doctors Master</a>
+          <a class="btn block" href="<?= url('hospitals_master.php') ?>">Hospitals Master</a>
+          <a class="btn block" href="<?= url('medicines_master.php') ?>">Medicines Master</a>
+        <?php endif; ?>
       </div>
     </div>
   </aside>
