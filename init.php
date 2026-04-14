@@ -81,6 +81,19 @@ function ensure_core_schema(): void {
     INDEX idx_login_attempts_email_ip (email, ip_address, created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+  _try_sql("CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    selector CHAR(16) NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_password_reset_selector (selector),
+    INDEX idx_password_reset_user (user_id),
+    INDEX idx_password_reset_expiry (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
   _try_sql("CREATE TABLE IF NOT EXISTS medicines_master (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
@@ -201,6 +214,84 @@ function csrf_validate(){ csrf_verify(); }
 
 function paginate($total,$per=12,$page=1){ $pages=max(1,(int)ceil($total/$per)); $page=max(1,min($pages,(int)$page)); $off=($page-1)*$per; return [$page,$pages,$off,$per]; }
 
+function client_ip(): string {
+  return substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64);
+}
+function normalize_email(string $email): string {
+  return strtolower(trim($email));
+}
+function password_meets_policy(string $password, array &$errors = []): bool {
+  if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
+  if (!preg_match('/[A-Z]/', $password)) $errors[] = 'Password must include at least one uppercase letter.';
+  if (!preg_match('/[a-z]/', $password)) $errors[] = 'Password must include at least one lowercase letter.';
+  if (!preg_match('/\d/', $password)) $errors[] = 'Password must include at least one number.';
+  return empty($errors);
+}
+function record_login_attempt(string $email, bool $success): void {
+  global $mysqli;
+  $email = normalize_email($email);
+  $ip = client_ip();
+  $stmt = $mysqli->prepare('INSERT INTO login_attempts (email, ip_address, was_successful) VALUES (?,?,?)');
+  if (!$stmt) return;
+  $ok = $success ? 1 : 0;
+  $stmt->bind_param('ssi', $email, $ip, $ok);
+  @$stmt->execute();
+  $stmt->close();
+}
+function login_is_locked(string $email, ?int &$retryAfterSeconds = null): bool {
+  global $mysqli;
+  $email = normalize_email($email);
+  $ip = client_ip();
+  $stmt = $mysqli->prepare("SELECT COUNT(*) AS fail_count, MIN(created_at) AS first_fail FROM login_attempts WHERE email=? AND ip_address=? AND was_successful=0 AND created_at >= (NOW() - INTERVAL 15 MINUTE)");
+  if (!$stmt) return false;
+  $stmt->bind_param('ss', $email, $ip);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc() ?: ['fail_count'=>0,'first_fail'=>null];
+  $stmt->close();
+  $fails = (int)($row['fail_count'] ?? 0);
+  if ($fails < 5) return false;
+  $retryAfterSeconds = 900;
+  if (!empty($row['first_fail'])) {
+    $elapsed = max(0, time() - strtotime((string)$row['first_fail']));
+    $retryAfterSeconds = max(60, 900 - $elapsed);
+  }
+  return true;
+}
+function create_password_reset_token(int $userId): array {
+  global $mysqli;
+  $selector = bin2hex(random_bytes(8));
+  $validator = bin2hex(random_bytes(32));
+  $tokenHash = hash('sha256', $validator);
+  $stmt = $mysqli->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id=? AND used_at IS NULL');
+  if ($stmt) { $stmt->bind_param('i', $userId); @$stmt->execute(); $stmt->close(); }
+  $stmt = $mysqli->prepare('INSERT INTO password_reset_tokens (user_id, selector, token_hash, expires_at) VALUES (?,?,?, DATE_ADD(NOW(), INTERVAL 60 MINUTE))');
+  if ($stmt) { $stmt->bind_param('iss', $userId, $selector, $tokenHash); @$stmt->execute(); $stmt->close(); }
+  return ['selector' => $selector, 'validator' => $validator];
+}
+function get_password_reset_row(string $selector): ?array {
+  global $mysqli;
+  $stmt = $mysqli->prepare('SELECT prt.*, u.email, u.name FROM password_reset_tokens prt INNER JOIN users u ON u.id = prt.user_id WHERE prt.selector=? AND prt.used_at IS NULL AND prt.expires_at >= NOW() LIMIT 1');
+  if (!$stmt) return null;
+  $stmt->bind_param('s', $selector);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc() ?: null;
+  $stmt->close();
+  return $row;
+}
+function consume_password_reset_token(string $selector, string $validator): ?array {
+  $row = get_password_reset_row($selector);
+  if (!$row) return null;
+  if (!hash_equals((string)$row['token_hash'], hash('sha256', $validator))) return null;
+  return $row;
+}
+function mark_password_reset_used(int $tokenId): void {
+  global $mysqli;
+  $stmt = $mysqli->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE id=?');
+  if (!$stmt) return;
+  $stmt->bind_param('i', $tokenId);
+  @$stmt->execute();
+  $stmt->close();
+}
 
 function master_table_ready(string $table): bool {
   global $mysqli;

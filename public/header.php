@@ -57,7 +57,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="<?= in_array($active,['doctors_master.php','hospitals_master.php','medicines_master.php'])?'active':'' ?>" href="<?= url('doctors_master.php') ?>">Masters</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Exports</a>
     <?php endif; ?>
-    <a class="<?= $active==='profile.php'?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
+    <a class="<?= in_array($active,['profile.php','change_password.php'])?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
     <a href="<?= url('logout.php') ?>" class="danger">Logout</a>
   </nav>
 </header>
@@ -140,6 +140,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <div class="stack">
         <a class="btn block" href="<?= url('reports.php') ?>">Open Reports</a>
         <a class="btn block primary" href="<?= url('report_add.php') ?>">Create Report</a>
+        <a class="btn block" href="<?= url('change_password.php') ?>">Security</a>
         <?php if (is_manager()): ?>
           <a class="btn block" href="<?= url('doctors_master.php') ?>">Doctors Master</a>
           <a class="btn block" href="<?= url('hospitals_master.php') ?>">Hospitals Master</a>
