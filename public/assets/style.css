@@ -88,3 +88,6 @@ a:hover{text-decoration:none}
 .table-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .table-actions form{margin:0}
 @media (max-width: 980px){.two-panels{grid-template-columns:1fr}}
+
+
+.auth-links{margin-top:16px;display:flex;justify-content:center;gap:12px;font-size:14px}.auth-links a{color:#0f766e;text-decoration:none;font-weight:600}.login-card.wide{max-width:540px}.inline-note{margin:16px 0;padding:12px 14px;border:1px solid #d7e8e4;background:#f6fbfa;border-radius:12px;color:#23413b}.max-640{max-width:640px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
