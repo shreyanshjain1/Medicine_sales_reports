@@ -55,6 +55,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="<?= $active==='admin_tasks.php'?'active':'' ?>" href="<?= url('admin_tasks.php') ?>">Tasks</a>
       <a class="<?= in_array($active,['admin_users.php','user_add.php','user_edit.php'])?'active':'' ?>" href="<?= url('admin_users.php') ?>">Users</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Exports</a>
+      <a class="<?= $active==='activity_logs.php'?'active':'' ?>" href="<?= url('activity_logs.php') ?>">Activity</a>
     <?php endif; ?>
     <a class="<?= $active==='profile.php'?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
     <a href="<?= url('logout.php') ?>" class="danger">Logout</a>

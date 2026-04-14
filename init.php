@@ -221,6 +221,57 @@ function log_audit(string $action, ?string $entityType = null, ?int $entityId = 
   $stmt->close();
 }
 
+
+function fetch_report_history(int $reportId): array {
+  global $mysqli;
+  $items = [];
+  if ($reportId <= 0) return $items;
+  $hasHistory = $mysqli->query("SHOW TABLES LIKE 'report_status_history'");
+  if ($hasHistory && $hasHistory->num_rows > 0) {
+    $sql = "SELECT h.id, 'status' AS entry_type, h.created_at, h.old_status, h.new_status, h.comment, u.name AS actor_name, NULL AS action, NULL AS details
+            FROM report_status_history h
+            LEFT JOIN users u ON u.id=h.actor_user_id
+            WHERE h.report_id=".(int)$reportId;
+    if ($res = $mysqli->query($sql)) {
+      while ($row = $res->fetch_assoc()) $items[] = $row;
+      $res->free();
+    }
+  }
+  $hasAudit = $mysqli->query("SHOW TABLES LIKE 'audit_logs'");
+  if ($hasAudit && $hasAudit->num_rows > 0) {
+    $sql = "SELECT a.id, 'audit' AS entry_type, a.created_at, NULL AS old_status, NULL AS new_status, NULL AS comment, u.name AS actor_name, a.action, a.details
+            FROM audit_logs a
+            LEFT JOIN users u ON u.id=a.user_id
+            WHERE a.entity_type='report' AND a.entity_id=".(int)$reportId;
+    if ($res = $mysqli->query($sql)) {
+      while ($row = $res->fetch_assoc()) $items[] = $row;
+      $res->free();
+    }
+  }
+  usort($items, static function($a, $b) {
+    $ta = strtotime((string)($a['created_at'] ?? '')) ?: 0;
+    $tb = strtotime((string)($b['created_at'] ?? '')) ?: 0;
+    if ($ta === $tb) return (int)($b['id'] ?? 0) <=> (int)($a['id'] ?? 0);
+    return $tb <=> $ta;
+  });
+  return $items;
+}
+
+function audit_action_label(?string $action): string {
+  $map = [
+    'report_created' => 'Report created',
+    'report_updated' => 'Report updated',
+    'report_reviewed' => 'Review updated',
+    'login_success' => 'Signed in',
+    'user_toggled' => 'User status changed',
+    'user_password_reset' => 'Password reset',
+    'event_created' => 'Task created',
+    'event_updated' => 'Task updated',
+  ];
+  $key = strtolower(trim((string)$action));
+  return $map[$key] ?? ucwords(str_replace('_', ' ', $key ?: 'activity'));
+}
+
 function normalize_upload_path(?string $path): ?string {
   if (!$path) return null;
   $path = str_replace('\\', '/', trim($path));
