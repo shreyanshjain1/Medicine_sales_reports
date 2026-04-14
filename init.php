@@ -81,6 +81,37 @@ function ensure_core_schema(): void {
     INDEX idx_login_attempts_email_ip (email, ip_address, created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+  _try_sql("CREATE TABLE IF NOT EXISTS medicines_master (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    category VARCHAR(120) NULL,
+    notes TEXT NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_medicines_name (name),
+    INDEX idx_medicines_active_name (active, name)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  _try_sql("CREATE TABLE IF NOT EXISTS hospitals_master (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    city VARCHAR(120) NULL,
+    address VARCHAR(255) NULL,
+    notes TEXT NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_hospitals_name (name),
+    INDEX idx_hospitals_city_name (city, name),
+    INDEX idx_hospitals_active_name (active, name)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  if (master_table_ready('doctors_masterlist')) {
+    if (!_col_exists('doctors_masterlist','active')) _try_sql("ALTER TABLE doctors_masterlist ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1");
+    _try_sql("ALTER TABLE doctors_masterlist ADD INDEX idx_doctors_active_name (active, dr_name)");
+  }
+
   if (_col_exists('reports','id')) {
     if (!_col_exists('reports','doctor_name'))    _try_sql("ALTER TABLE reports ADD COLUMN doctor_name VARCHAR(120) NOT NULL DEFAULT '' AFTER user_id");
     if (!_col_exists('reports','doctor_email'))   _try_sql("ALTER TABLE reports ADD COLUMN doctor_email VARCHAR(150) NULL AFTER doctor_name");
@@ -170,6 +201,49 @@ function csrf_validate(){ csrf_verify(); }
 
 function paginate($total,$per=12,$page=1){ $pages=max(1,(int)ceil($total/$per)); $page=max(1,min($pages,(int)$page)); $off=($page-1)*$per; return [$page,$pages,$off,$per]; }
 
+
+function master_table_ready(string $table): bool {
+  global $mysqli;
+  $stmt = $mysqli->prepare("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1");
+  if (!$stmt) return false;
+  $stmt->bind_param('s', $table);
+  $stmt->execute();
+  $ok = (bool)$stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  return $ok;
+}
+
+function fetch_master_options(string $table, string $labelCol = 'name'): array {
+  global $mysqli;
+  if (!master_table_ready($table) || !preg_match('/^[a-zA-Z0-9_]+$/', $table) || !preg_match('/^[a-zA-Z0-9_]+$/', $labelCol)) return [];
+  $opts = [];
+  $sql = "SELECT id, {$labelCol} AS label FROM {$table} WHERE active=1 ORDER BY {$labelCol} ASC";
+  if ($res = $mysqli->query($sql)) {
+    while ($row = $res->fetch_assoc()) $opts[] = $row;
+    $res->free();
+  }
+  return $opts;
+}
+
+function fetch_doctor_master_records(): array {
+  global $mysqli;
+  if (!master_table_ready('doctors_masterlist')) return [];
+  $rows = [];
+  $cols = array_flip(db_table_columns('doctors_masterlist'));
+  $nameCol = isset($cols['dr_name']) ? 'dr_name' : (isset($cols['doctor_name']) ? 'doctor_name' : null);
+  if (!$nameCol) return [];
+  $emailCol = isset($cols['email']) ? 'email' : "''";
+  $placeCol = isset($cols['place']) ? 'place' : "''";
+  $hospitalCol = isset($cols['hospital_address']) ? 'hospital_address' : "''";
+  $activeWhere = isset($cols['active']) ? 'WHERE active=1' : '';
+  $sql = "SELECT id, {$nameCol} AS doctor_name, {$emailCol} AS email, {$placeCol} AS city, {$hospitalCol} AS hospital_name FROM doctors_masterlist {$activeWhere} ORDER BY {$nameCol} ASC";
+  if ($res = $mysqli->query($sql)) {
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
+    $res->free();
+  }
+  return $rows;
+}
+
 function db_table_columns(string $table): array {
   static $cache = [];
   $key = strtolower($table);
@@ -219,57 +293,6 @@ function log_audit(string $action, ?string $entityType = null, ?int $entityId = 
   $stmt->bind_param('ississ', $uid, $action, $entityType, $entityId, $details, $ip);
   @$stmt->execute();
   $stmt->close();
-}
-
-
-function fetch_report_history(int $reportId): array {
-  global $mysqli;
-  $items = [];
-  if ($reportId <= 0) return $items;
-  $hasHistory = $mysqli->query("SHOW TABLES LIKE 'report_status_history'");
-  if ($hasHistory && $hasHistory->num_rows > 0) {
-    $sql = "SELECT h.id, 'status' AS entry_type, h.created_at, h.old_status, h.new_status, h.comment, u.name AS actor_name, NULL AS action, NULL AS details
-            FROM report_status_history h
-            LEFT JOIN users u ON u.id=h.actor_user_id
-            WHERE h.report_id=".(int)$reportId;
-    if ($res = $mysqli->query($sql)) {
-      while ($row = $res->fetch_assoc()) $items[] = $row;
-      $res->free();
-    }
-  }
-  $hasAudit = $mysqli->query("SHOW TABLES LIKE 'audit_logs'");
-  if ($hasAudit && $hasAudit->num_rows > 0) {
-    $sql = "SELECT a.id, 'audit' AS entry_type, a.created_at, NULL AS old_status, NULL AS new_status, NULL AS comment, u.name AS actor_name, a.action, a.details
-            FROM audit_logs a
-            LEFT JOIN users u ON u.id=a.user_id
-            WHERE a.entity_type='report' AND a.entity_id=".(int)$reportId;
-    if ($res = $mysqli->query($sql)) {
-      while ($row = $res->fetch_assoc()) $items[] = $row;
-      $res->free();
-    }
-  }
-  usort($items, static function($a, $b) {
-    $ta = strtotime((string)($a['created_at'] ?? '')) ?: 0;
-    $tb = strtotime((string)($b['created_at'] ?? '')) ?: 0;
-    if ($ta === $tb) return (int)($b['id'] ?? 0) <=> (int)($a['id'] ?? 0);
-    return $tb <=> $ta;
-  });
-  return $items;
-}
-
-function audit_action_label(?string $action): string {
-  $map = [
-    'report_created' => 'Report created',
-    'report_updated' => 'Report updated',
-    'report_reviewed' => 'Review updated',
-    'login_success' => 'Signed in',
-    'user_toggled' => 'User status changed',
-    'user_password_reset' => 'Password reset',
-    'event_created' => 'Task created',
-    'event_updated' => 'Task updated',
-  ];
-  $key = strtolower(trim((string)$action));
-  return $map[$key] ?? ucwords(str_replace('_', ' ', $key ?: 'activity'));
 }
 
 function normalize_upload_path(?string $path): ?string {

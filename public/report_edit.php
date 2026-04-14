@@ -6,6 +6,9 @@ if(!$r){ http_response_code(404); exit('Not found'); }
 if(!is_manager() && (int)$r['user_id']!== (int)user()['id']){ http_response_code(403); exit('Forbidden'); }
 if(($r['status'] ?? 'pending')==='approved' && !is_manager()){ http_response_code(403); exit('Approved reports cannot be edited.'); }
 $errors=[]; $ok=false;
+$doctorMasterRecords = fetch_doctor_master_records();
+$medicineOptions = fetch_master_options('medicines_master');
+$hospitalOptions = fetch_master_options('hospitals_master');
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_verify();
   $doctor_name=trim((string)post('doctor_name','')); $doctor_email=trim((string)post('doctor_email','')) ?: 'NA';
@@ -21,18 +24,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $stmt->bind_param('ssssssssssi',$doctor_name,$doctor_email,$purpose,$medicine_name,$hospital_name,$visit_dt,$summary,$remarks,$attachment_path,$status,$id);
     if($stmt->execute()){
       $ok=true;
-      $oldStatus = (string)($r['status'] ?? 'pending');
-      if ($oldStatus !== $status) {
-        $historyComment = 'Report edited and resubmitted for review';
-        $hs = $mysqli->prepare('INSERT INTO report_status_history (report_id, actor_user_id, old_status, new_status, comment) VALUES (?,?,?,?,?)');
-        if ($hs) {
-          $userId = (int)user()['id'];
-          $hs->bind_param('iisss', $id, $userId, $oldStatus, $status, $historyComment);
-          @$hs->execute();
-          $hs->close();
-        }
-      }
-      log_audit('report_updated', 'report', $id, 'Report edited' . ($oldStatus !== $status ? ' and resubmitted' : ''));
+      log_audit('report_updated', 'report', $id, 'Report edited');
       $r=array_merge($r,['doctor_name'=>$doctor_name,'doctor_email'=>$doctor_email,'purpose'=>$purpose,'medicine_name'=>$medicine_name,'hospital_name'=>$hospital_name,'visit_datetime'=>$visit_dt,'summary'=>$summary,'remarks'=>$remarks,'attachment_path'=>$attachment_path,'status'=>$status]);
     } else $errors[]='Failed to update report.';
     $stmt->close();
@@ -46,13 +38,23 @@ $title='Edit Report #'.$id; include __DIR__.'/header.php';
   <?php if($errors): ?><div class="alert danger"><?php foreach($errors as $e) echo '<div>'.e($e).'</div>'; ?></div><?php endif; ?>
   <form method="post" class="form" enctype="multipart/form-data"><?php csrf_input(); ?>
     <div class="grid two">
-      <label>Doctor Name<input name="doctor_name" value="<?= e($r['doctor_name']) ?>" required></label>
-      <label>Doctor Email<input type="email" name="doctor_email" value="<?= e($r['doctor_email']) ?>"></label>
+      <label>Load From Doctor Master
+        <select id="master_doctor_select">
+          <option value="">Choose doctor from master list</option>
+          <?php foreach($doctorMasterRecords as $doc): ?>
+            <option value="<?= (int)$doc['id'] ?>" data-name="<?= e($doc['doctor_name']) ?>" data-email="<?= e($doc['email']) ?>" data-hospital="<?= e($doc['hospital_name']) ?>"><?= e($doc['doctor_name']) ?><?= !empty($doc['city']) ? ' · '.e($doc['city']) : '' ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label>Doctor Name<input id="doctor_name_input" name="doctor_name" value="<?= e($r['doctor_name']) ?>" required></label>
+      <label>Doctor Email<input id="doctor_email_input" type="email" name="doctor_email" value="<?= e($r['doctor_email']) ?>"></label>
       <label>Purpose<input name="purpose" value="<?= e($r['purpose']) ?>"></label>
-      <label>Medicine<input name="medicine_name" value="<?= e($r['medicine_name']) ?>"></label>
-      <label>Hospital/Clinic<input name="hospital_name" value="<?= e($r['hospital_name']) ?>"></label>
+      <label>Medicine<input list="medicine_master_list" name="medicine_name" value="<?= e($r['medicine_name']) ?>"></label>
+      <label>Hospital/Clinic<input list="hospital_master_list" id="hospital_name_input" name="hospital_name" value="<?= e($r['hospital_name']) ?>"></label>
       <label>Visit Datetime<input type="datetime-local" name="visit_datetime" value="<?= e(str_replace(' ','T',$r['visit_datetime'])) ?>" required></label>
     </div>
+    <datalist id="medicine_master_list"><?php foreach($medicineOptions as $opt): ?><option value="<?= e($opt['label']) ?>"></option><?php endforeach; ?></datalist>
+    <datalist id="hospital_master_list"><?php foreach($hospitalOptions as $opt): ?><option value="<?= e($opt['label']) ?>"></option><?php endforeach; ?></datalist>
     <label>Summary<textarea name="summary" rows="4"><?= e($r['summary']) ?></textarea></label>
     <label>Remarks<textarea name="remarks" rows="3"><?= e($r['remarks']) ?></textarea></label>
     <p>Current Status: <span class="badge <?= e($r['status'] ?: 'pending') ?>"><?= e($r['status'] ?: 'pending') ?></span></p>
@@ -61,4 +63,20 @@ $title='Edit Report #'.$id; include __DIR__.'/header.php';
     <div class="actions-inline"><button class="btn primary" type="submit">Save Changes</button><a class="btn" href="report_view.php?id=<?= (int)$r['id'] ?>">Back</a></div>
   </form>
 </div>
+<script>
+(function(){
+  const pick = document.getElementById('master_doctor_select');
+  if (!pick) return;
+  pick.addEventListener('change', function(){
+    const opt = this.options[this.selectedIndex];
+    if (!opt || !opt.value) return;
+    const nameEl = document.getElementById('doctor_name_input');
+    const emailEl = document.getElementById('doctor_email_input');
+    const hospEl = document.getElementById('hospital_name_input');
+    if (nameEl) nameEl.value = opt.getAttribute('data-name') || nameEl.value;
+    if (emailEl) emailEl.value = (opt.getAttribute('data-email') || emailEl.value || 'NA');
+    if (hospEl && !hospEl.value) hospEl.value = opt.getAttribute('data-hospital') || hospEl.value;
+  });
+})();
+</script>
 <?php include __DIR__.'/footer.php'; ?>

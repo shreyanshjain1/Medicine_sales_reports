@@ -28,6 +28,10 @@ if ($prefill && $event_id) {
   }
 }
 $errors=[]; $ok=false; $savedId=0;
+$doctorMasterRecords = fetch_doctor_master_records();
+$medicineOptions = fetch_master_options('medicines_master');
+$hospitalOptions = fetch_master_options('hospitals_master');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_validate();
   $doctor_name=trim((string)post('doctor_name',''));
@@ -51,16 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       'status'=>'pending', 'created_at'=>date('Y-m-d H:i:s')
     ]);
     if ($savedId > 0) {
-      $hs = $mysqli->prepare('INSERT INTO report_status_history (report_id, actor_user_id, old_status, new_status, comment) VALUES (?,?,?,?,?)');
-      if ($hs) {
-        $oldStatus = null;
-        $newStatus = 'pending';
-        $historyComment = 'Report submitted for review';
-        $userId = (int)user()['id'];
-        $hs->bind_param('iisss', $savedId, $userId, $oldStatus, $newStatus, $historyComment);
-        @$hs->execute();
-        $hs->close();
-      }
       log_audit('report_created', 'report', $savedId, 'Report submitted');
       $ok = true;
       $pre = ['doctor_name'=>'','doctor_email'=>'','purpose'=>'','medicine_name'=>'','hospital_name'=>'','visit_datetime'=>'','summary'=>'','remarks'=>''];
@@ -78,13 +72,23 @@ $title = 'Create Report'; include __DIR__.'/header.php';
   <form method="post" class="form" id="reportForm" enctype="multipart/form-data">
     <?php csrf_input(); ?>
     <div class="grid two">
-      <label>Doctor Name<input name="doctor_name" value="<?= e($pre['doctor_name']) ?>" required></label>
-      <label>Doctor Email<input name="doctor_email" value="<?= e($pre['doctor_email']) ?>" placeholder="NA"></label>
+      <label>Load From Doctor Master
+        <select id="master_doctor_select">
+          <option value="">Choose doctor from master list</option>
+          <?php foreach($doctorMasterRecords as $doc): ?>
+            <option value="<?= (int)$doc['id'] ?>" data-name="<?= e($doc['doctor_name']) ?>" data-email="<?= e($doc['email']) ?>" data-hospital="<?= e($doc['hospital_name']) ?>"><?= e($doc['doctor_name']) ?><?= !empty($doc['city']) ? ' · '.e($doc['city']) : '' ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label>Doctor Name<input id="doctor_name_input" name="doctor_name" value="<?= e($pre['doctor_name']) ?>" required></label>
+      <label>Doctor Email<input id="doctor_email_input" name="doctor_email" value="<?= e($pre['doctor_email']) ?>" placeholder="NA"></label>
       <label>Purpose<input name="purpose" value="<?= e($pre['purpose']) ?>"></label>
-      <label>Medicine<input name="medicine_name" value="<?= e($pre['medicine_name']) ?>"></label>
-      <label>Hospital / Clinic<input name="hospital_name" value="<?= e($pre['hospital_name']) ?>"></label>
+      <label>Medicine<input list="medicine_master_list" name="medicine_name" value="<?= e($pre['medicine_name']) ?>"></label>
+      <label>Hospital / Clinic<input list="hospital_master_list" id="hospital_name_input" name="hospital_name" value="<?= e($pre['hospital_name']) ?>"></label>
       <label>Visit Date / Time<input type="datetime-local" name="visit_datetime" value="<?= e(str_replace(' ','T',$pre['visit_datetime'])) ?>" required></label>
     </div>
+    <datalist id="medicine_master_list"><?php foreach($medicineOptions as $opt): ?><option value="<?= e($opt['label']) ?>"></option><?php endforeach; ?></datalist>
+    <datalist id="hospital_master_list"><?php foreach($hospitalOptions as $opt): ?><option value="<?= e($opt['label']) ?>"></option><?php endforeach; ?></datalist>
     <label>Summary<textarea name="summary" rows="3"><?= e($pre['summary']) ?></textarea></label>
     <label>Remarks<textarea name="remarks" rows="3"><?= e($pre['remarks']) ?></textarea></label>
     <label>Attachment (optional)<input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png"></label>
@@ -108,7 +112,24 @@ $title = 'Create Report'; include __DIR__.'/header.php';
     clearB?.addEventListener('click', (e)=>{ e.preventDefault(); pad?.clear?.(); hidden.value=''; });
     form.addEventListener('submit', capture); window.addEventListener('resize', resizeCanvas);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSignaturePad); else initSignaturePad();
+  function initMasterFill(){
+    const pick = document.getElementById('master_doctor_select');
+    if (!pick) return;
+    pick.addEventListener('change', function(){
+      const opt = this.options[this.selectedIndex];
+      if (!opt || !opt.value) return;
+      const name = opt.getAttribute('data-name') || '';
+      const email = opt.getAttribute('data-email') || '';
+      const hospital = opt.getAttribute('data-hospital') || '';
+      const nameEl = document.getElementById('doctor_name_input');
+      const emailEl = document.getElementById('doctor_email_input');
+      const hospEl = document.getElementById('hospital_name_input');
+      if (nameEl && !nameEl.value) nameEl.value = name;
+      if (emailEl && (!emailEl.value || emailEl.value === 'NA')) emailEl.value = email || 'NA';
+      if (hospEl && !hospEl.value) hospEl.value = hospital;
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ()=>{ initSignaturePad(); initMasterFill(); }); else { initSignaturePad(); initMasterFill(); }
 })();
 </script>
 <?php include __DIR__.'/footer.php'; ?>
