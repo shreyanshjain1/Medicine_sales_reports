@@ -1,4 +1,5 @@
 <?php
+<<<<<<< HEAD
 require_once __DIR__.'/../init.php';
 require_manager();
 
@@ -56,3 +57,18 @@ $title='Export Center'; include __DIR__.'/header.php';
   <p class="subtle">CSV columns include employee, doctor, product, hospital, visit date, workflow status, and manager comments.</p>
 </div>
 <?php include __DIR__.'/footer.php'; ?>
+=======
+require_once __DIR__.'/../init.php'; require_manager();
+if(isset($_GET['download'])){
+  header('Content-Type: text/csv'); header('Content-Disposition: attachment; filename="reports_export.csv"');
+  $out=fopen('php://output','w');
+  fputcsv($out,['ID','Employee','Doctor','Email','Purpose','Medicine','Hospital','Visit','Status','Manager Comment']);
+  $res=$mysqli->query('SELECT r.id,u.name employee,r.doctor_name,r.doctor_email,r.purpose,r.medicine_name,r.hospital_name,r.visit_datetime,r.status,r.manager_comment FROM reports r JOIN users u ON u.id=r.user_id ORDER BY r.visit_datetime DESC');
+  while($r=$res->fetch_assoc()){ fputcsv($out,$r); }
+  exit;
+}
+$title='Export'; include __DIR__.'/header.php';
+?>
+<div class="card"><h2>Export</h2><p>Export all reports as CSV.</p><a class="btn primary" href="exports.php?download=1">Download CSV</a></div>
+<?php include __DIR__.'/footer.php'; ?>
+>>>>>>> 37d1d03e21f7806a028237f4c9fce390fa63d02d
