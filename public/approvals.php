@@ -25,7 +25,7 @@ if ($q !== '') {
 $countSql = "SELECT COUNT(*) c FROM reports r LEFT JOIN users u ON u.id=r.user_id {$where}";
 $total = (int)($mysqli->query($countSql)->fetch_assoc()['c'] ?? 0);
 [$page,$pages,$off,$per] = paginate($total, 15, $page);
-$sql = "SELECT r.id, r.doctor_name, r.medicine_name, r.hospital_name, r.visit_datetime, COALESCE(NULLIF(r.status,''),'pending') AS status, u.name AS employee
+$sql = "SELECT r.id, r.doctor_name, r.medicine_name, r.hospital_name, r.visit_datetime, COALESCE(NULLIF(r.status,''),'pending') AS status, u.name AS employee, r.manager_comment
         FROM reports r
         LEFT JOIN users u ON u.id=r.user_id
         {$where}
@@ -35,15 +35,36 @@ $sql = "SELECT r.id, r.doctor_name, r.medicine_name, r.hospital_name, r.visit_da
 $rows = [];
 $res = $mysqli->query($sql);
 if ($res) while($row = $res->fetch_assoc()) $rows[] = $row;
+$summary = report_review_summary();
 $title='Approvals'; include __DIR__.'/header.php';
 ?>
-<div class="crm-hero">
+<div class="page-head">
   <div>
     <h2>Approval Queue</h2>
-    <div class="subtle">Fast review view for pending and returned reports.</div>
+    <div class="subtle">Fast review view for pending, returned, and approved reports.</div>
   </div>
   <div class="pill neutral"><?= (int)$total ?> result<?= $total===1?'':'s' ?></div>
 </div>
+
+<div class="summary-grid summary-grid-dashboard review-summary-grid">
+  <div class="card summary-card">
+    <div class="summary-label">Pending</div>
+    <div class="summary-value summary-value-sm"><?= (int)$summary['pending'] ?></div>
+  </div>
+  <div class="card summary-card">
+    <div class="summary-label">Needs Changes</div>
+    <div class="summary-value summary-value-sm"><?= (int)$summary['needs_changes'] ?></div>
+  </div>
+  <div class="card summary-card">
+    <div class="summary-label">Approved</div>
+    <div class="summary-value summary-value-sm"><?= (int)$summary['approved'] ?></div>
+  </div>
+  <div class="card summary-card">
+    <div class="summary-label">Overdue Pending</div>
+    <div class="summary-value summary-value-sm"><?= (int)$summary['overdue_pending'] ?></div>
+  </div>
+</div>
+
 <div class="card">
   <form class="filters" method="get">
     <label>Status
@@ -64,10 +85,10 @@ $title='Approvals'; include __DIR__.'/header.php';
   </form>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Employee</th><th>Doctor</th><th>Medicine</th><th>Hospital</th><th>Visit</th><th>Status</th><th>Action</th></tr></thead>
+      <thead><tr><th>Employee</th><th>Doctor</th><th>Medicine</th><th>Hospital</th><th>Visit</th><th>Status</th><th>Review Note</th><th>Action</th></tr></thead>
       <tbody>
       <?php if (!$rows): ?>
-        <tr><td colspan="7" class="muted">No reports found for this queue.</td></tr>
+        <tr><td colspan="8" class="muted">No reports found for this queue.</td></tr>
       <?php else: foreach($rows as $row): ?>
         <tr>
           <td><?= e($row['employee'] ?? '—') ?></td>
@@ -75,7 +96,8 @@ $title='Approvals'; include __DIR__.'/header.php';
           <td><?= e($row['medicine_name']) ?></td>
           <td><?= e($row['hospital_name']) ?></td>
           <td><?= e((string)$row['visit_datetime']) ?></td>
-          <td><span class="badge <?= e($row['status']) ?>"><?= e($row['status']) ?></span></td>
+          <td><span class="badge <?= e($row['status']) ?>"><?= e(ucfirst(str_replace('_',' ',$row['status']))) ?></span></td>
+          <td class="table-note"><?= e($row['manager_comment'] ?: '—') ?></td>
           <td><a class="btn tiny primary" href="report_view.php?id=<?= (int)$row['id'] ?>">Review</a></td>
         </tr>
       <?php endforeach; endif; ?>

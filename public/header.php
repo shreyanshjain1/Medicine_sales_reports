@@ -46,7 +46,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
 <body class="light">
 
 <header class="topbar glass">
-  <?php $active = basename($_SERVER['PHP_SELF']); ?>
+  <?php $active = basename($_SERVER['PHP_SELF']); $notifUnread = function_exists('notifications_unread_count') ? notifications_unread_count() : 0; ?>
   <div class="brand titlecase"><?= e(COMPANY_NAME) ?> · Reporting</div>
   <nav class="nav titlecase">
     <a class="<?= $active==='dashboard.php'?'active':'' ?>" href="<?= url('dashboard.php') ?>">Dashboard</a>
@@ -58,8 +58,11 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Export</a>
     <?php endif; ?>
     <?php if (is_manager() || is_district_manager()): ?>
+      <a class="<?= $active==='approvals.php'?'active':'' ?>" href="<?= url('approvals.php') ?>">Approvals</a>
+      <a class="<?= $active==='activity_logs.php'?'active':'' ?>" href="<?= url('activity_logs.php') ?>">Activity</a>
       <a class="<?= $active==='performance.php'?'active':'' ?>" href="<?= url('performance.php') ?>">Performance</a>
     <?php endif; ?>
+    <a class="<?= $active==='notifications.php'?'active':'' ?>" href="<?= url('notifications.php') ?>">Notifications<?php if ($notifUnread > 0): ?> <span class="pill notif-pill"><?= (int)$notifUnread ?></span><?php endif; ?></a>
     <a class="<?= $active==='profile.php'?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
     <a href="<?= url('logout.php') ?>" class="danger">Logout</a>
   </nav>
