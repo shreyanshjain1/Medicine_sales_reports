@@ -237,12 +237,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canReview) {
     $status = 'pending';
   }
 
+  $oldStatus = (string)($r['status'] ?? 'pending');
   $stmt = $mysqli->prepare("UPDATE reports SET status=?, manager_comment=? WHERE id=?");
   if ($stmt) {
     $stmt->bind_param('ssi', $status, $comment, $id);
     $stmt->execute();
     $stmt->close();
   }
+  log_audit('report_reviewed', 'report', $id, 'Status changed to ' . $status . ($comment !== '' ? ' with comment' : ''));
+  add_report_status_history($id, $oldStatus, $status, $comment);
 
   $statusLabelMap = ['pending' => 'Pending', 'approved' => 'Approved', 'needs_changes' => 'Needs changes'];
   $body = 'Your report #' . $id . ' was reviewed. New status: ' . ($statusLabelMap[$status] ?? ucfirst($status)) . '.';

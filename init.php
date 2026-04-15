@@ -330,4 +330,360 @@ function db_safe_insert(string $table, array $data): int {
   $stmt->close();
   return $id;
 }
+
+/* ---------------------------
+   App support helpers
+   --------------------------- */
+function normalize_email(string $email): string {
+  return strtolower(trim($email));
+}
+
+function can_run_setup(): bool {
+  $allow = defined('ALLOW_SETUP') ? (bool)ALLOW_SETUP : false;
+  if (!$allow) return false;
+  $key = (string)($_GET['setup_key'] ?? $_POST['setup_key'] ?? '');
+  $expected = defined('SETUP_KEY') ? (string)SETUP_KEY : '';
+  return $expected === '' || ($key !== '' && hash_equals($expected, $key));
+}
+
+function can_use_dev_tools(): bool {
+  $allow = defined('ALLOW_DEV_TOOLS') ? (bool)ALLOW_DEV_TOOLS : false;
+  if (!$allow) return false;
+  if (is_logged_in() && is_manager()) return true;
+  $key = (string)($_GET['dev_key'] ?? $_POST['dev_key'] ?? '');
+  $expected = defined('DEV_TOOL_KEY') ? (string)DEV_TOOL_KEY : '';
+  return $expected !== '' && $key !== '' && hash_equals($expected, $key);
+}
+
+function ensure_supporting_schema(): void {
+  if (!empty($_SESSION['_supporting_schema_v8'])) return;
+  $_SESSION['_supporting_schema_v8'] = 1;
+  _try_sql("CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    action VARCHAR(80) NOT NULL,
+    entity_type VARCHAR(80) NULL,
+    entity_id INT NULL,
+    details TEXT NULL,
+    ip_address VARCHAR(64) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_audit_action (action),
+    KEY idx_audit_entity (entity_type, entity_id),
+    KEY idx_audit_created (created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  _try_sql("CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(180) NOT NULL,
+    body TEXT NULL,
+    type VARCHAR(80) NOT NULL DEFAULT 'info',
+    entity_type VARCHAR(80) NULL,
+    entity_id INT NULL,
+    action_url VARCHAR(255) NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    actor_user_id INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_notifications_user (user_id, is_read, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  _try_sql("CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    selector VARCHAR(32) NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_reset_selector (selector),
+    KEY idx_reset_user (user_id),
+    KEY idx_reset_expiry (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  _try_sql("CREATE TABLE IF NOT EXISTS login_attempts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(190) NOT NULL,
+    ip_address VARCHAR(64) NULL,
+    success TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_login_email_time (email, created_at),
+    KEY idx_login_ip_time (ip_address, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  _try_sql("CREATE TABLE IF NOT EXISTS report_status_history (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    actor_user_id INT NULL,
+    old_status VARCHAR(40) NULL,
+    new_status VARCHAR(40) NOT NULL,
+    comment TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_rsh_report_created (report_id, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  _try_sql("CREATE TABLE IF NOT EXISTS event_attendees (
+    event_id INT NOT NULL,
+    user_id INT NOT NULL,
+    added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(event_id,user_id),
+    KEY idx_event_attendees_user (user_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+ensure_supporting_schema();
+
+function log_audit(string $action, ?string $entityType=null, ?int $entityId=null, ?string $details=null): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $ip = substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64);
+  $stmt = $mysqli->prepare('INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address) VALUES (?,?,?,?,?,?)');
+  if (!$stmt) return;
+  $entityId = $entityId ?: null;
+  $stmt->bind_param('ississ', $uid, $action, $entityType, $entityId, $details, $ip);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function audit_action_label(string $action): string {
+  $map = [
+    'login_success' => 'Login success',
+    'profile_updated' => 'Profile updated',
+    'password_changed' => 'Password changed',
+    'password_reset_requested' => 'Password reset requested',
+    'password_reset_completed' => 'Password reset completed',
+    'user_toggled' => 'User status changed',
+    'user_password_reset' => 'Temporary password reset',
+    'report_created' => 'Report submitted',
+    'report_updated' => 'Report updated',
+    'report_reviewed' => 'Report reviewed',
+  ];
+  return $map[$action] ?? ucwords(str_replace('_', ' ', $action));
+}
+
+function fetch_doctor_master_records(): array {
+  global $mysqli;
+  $rows = [];
+  $sql = "SELECT id, dr_name AS doctor_name, email, hospital_address AS hospital_name, place AS city FROM doctors_masterlist ORDER BY dr_name ASC";
+  if ($res = $mysqli->query($sql)) {
+    while ($r = $res->fetch_assoc()) $rows[] = $r;
+    $res->free();
+  }
+  return $rows;
+}
+
+function fetch_master_options(string $table): array {
+  global $mysqli;
+  $allowed = ['medicines_master' => 'name', 'hospitals_master' => 'name'];
+  if (!isset($allowed[$table])) return [];
+  $col = $allowed[$table];
+  $rows = [];
+  $sql = "SELECT id, {$col} AS label FROM {$table} WHERE active=1 ORDER BY {$col} ASC";
+  if ($res = $mysqli->query($sql)) {
+    while ($r = $res->fetch_assoc()) $rows[] = $r;
+    $res->free();
+  }
+  return $rows;
+}
+
+function normalize_upload_path($path): ?string {
+  $path = trim((string)$path);
+  if ($path === '') return null;
+  $path = str_replace('\\', '/', $path);
+  if (str_starts_with($path, ATTACH_DIR)) {
+    return 'uploads/attachments/' . basename($path);
+  }
+  return $path;
+}
+
+function save_uploaded_attachment(array $file, int $userId, array &$errors): ?string {
+  if (empty($file['name']) || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) return null;
+  $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+  $allowed = ['pdf','jpg','jpeg','png'];
+  if (!in_array($ext, $allowed, true)) {
+    $errors[] = 'Invalid attachment type. Allowed: PDF/JPG/PNG.';
+    return null;
+  }
+  $size = (int)($file['size'] ?? 0);
+  if ($size > 5 * 1024 * 1024) {
+    $errors[] = 'Attachment must be 5MB or smaller.';
+    return null;
+  }
+  if (!is_dir(ATTACH_DIR)) @mkdir(ATTACH_DIR, 0775, true);
+  $name = 'att_' . $userId . '_' . time() . '_' . substr(md5((string)$file['name']),0,8) . '.' . $ext;
+  $dest = rtrim(ATTACH_DIR, '/\\') . DIRECTORY_SEPARATOR . $name;
+  if (!@move_uploaded_file($file['tmp_name'], $dest)) {
+    $errors[] = 'Failed to upload attachment.';
+    return null;
+  }
+  return 'uploads/attachments/' . $name;
+}
+
+function notification_recipient_ids_for_report_owner(int $ownerId): array {
+  global $mysqli;
+  $ids = [];
+  if ($res = $mysqli->query("SELECT id FROM users WHERE active=1 AND role IN ('manager','admin')")) {
+    while ($r = $res->fetch_assoc()) $ids[] = (int)$r['id'];
+    $res->free();
+  }
+  $stmt = $mysqli->prepare('SELECT district_manager_id FROM users WHERE id=? LIMIT 1');
+  if ($stmt) {
+    $stmt->bind_param('i', $ownerId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!empty($row['district_manager_id'])) $ids[] = (int)$row['district_manager_id'];
+  }
+  $ids = array_values(array_unique(array_filter($ids)));
+  return array_values(array_filter($ids, fn($x) => $x !== $ownerId));
+}
+
+function notify_user(int $userId, string $title, string $body='', string $type='info', ?string $entityType=null, ?int $entityId=null, ?string $actionUrl=null, ?int $actorUserId=null): void {
+  global $mysqli;
+  $stmt = $mysqli->prepare('INSERT INTO notifications (user_id, title, body, type, entity_type, entity_id, action_url, actor_user_id) VALUES (?,?,?,?,?,?,?,?)');
+  if (!$stmt) return;
+  $stmt->bind_param('issssisi', $userId, $title, $body, $type, $entityType, $entityId, $actionUrl, $actorUserId);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function notify_many(array $userIds, string $title, string $body='', string $type='info', ?string $entityType=null, ?int $entityId=null, ?string $actionUrl=null, ?int $actorUserId=null): void {
+  foreach (array_values(array_unique(array_filter(array_map('intval',$userIds)))) as $uid) {
+    notify_user($uid, $title, $body, $type, $entityType, $entityId, $actionUrl, $actorUserId);
+  }
+}
+
+function mark_notification_read(int $id): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare('UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?');
+  if (!$stmt) return;
+  $stmt->bind_param('ii', $id, $uid);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function mark_all_notifications_read(): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare('UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0');
+  if (!$stmt) return;
+  $stmt->bind_param('i', $uid);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function password_meets_policy(string $password, array &$errors=[]): bool {
+  $errors = [];
+  if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
+  if (!preg_match('/[A-Z]/', $password)) $errors[] = 'Add at least one uppercase letter.';
+  if (!preg_match('/[a-z]/', $password)) $errors[] = 'Add at least one lowercase letter.';
+  if (!preg_match('/\d/', $password)) $errors[] = 'Add at least one number.';
+  return !$errors;
+}
+
+function create_password_reset_token(int $userId): array {
+  global $mysqli;
+  $selector = bin2hex(random_bytes(8));
+  $validator = bin2hex(random_bytes(16));
+  $hash = password_hash($validator, PASSWORD_DEFAULT);
+  $expires = date('Y-m-d H:i:s', time() + 3600);
+  $stmt = $mysqli->prepare('INSERT INTO password_reset_tokens (user_id, selector, token_hash, expires_at) VALUES (?,?,?,?)');
+  if ($stmt) {
+    $stmt->bind_param('isss', $userId, $selector, $hash, $expires);
+    @$stmt->execute();
+    $stmt->close();
+  }
+  return ['selector'=>$selector, 'validator'=>$validator, 'expires_at'=>$expires];
+}
+
+function consume_password_reset_token(string $selector, string $validator): ?array {
+  global $mysqli;
+  $stmt = $mysqli->prepare('SELECT * FROM password_reset_tokens WHERE selector=? AND used_at IS NULL AND expires_at >= NOW() ORDER BY id DESC LIMIT 1');
+  if (!$stmt) return null;
+  $stmt->bind_param('s', $selector);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  if (!$row) return null;
+  if (!password_verify($validator, (string)$row['token_hash'])) return null;
+  return $row;
+}
+
+function mark_password_reset_used(int $id): void {
+  global $mysqli;
+  $stmt = $mysqli->prepare('UPDATE password_reset_tokens SET used_at=NOW() WHERE id=?');
+  if (!$stmt) return;
+  $stmt->bind_param('i', $id);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function login_is_locked(string $email, int &$retryAfter=0): bool {
+  global $mysqli;
+  $retryAfter = 0;
+  $email = normalize_email($email);
+  if ($email === '') return false;
+  $stmt = $mysqli->prepare("SELECT COUNT(*) AS fails, UNIX_TIMESTAMP(MIN(DATE_ADD(created_at, INTERVAL 15 MINUTE))) AS unlock_at FROM login_attempts WHERE email=? AND success=0 AND created_at >= (NOW() - INTERVAL 15 MINUTE)");
+  if (!$stmt) return false;
+  $stmt->bind_param('s', $email);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  $fails = (int)($row['fails'] ?? 0);
+  if ($fails < 5) return false;
+  $unlockAt = (int)($row['unlock_at'] ?? 0);
+  $retryAfter = max(0, $unlockAt - time());
+  return true;
+}
+
+function record_login_attempt(string $email, bool $success): void {
+  global $mysqli;
+  $email = normalize_email($email);
+  $ip = substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64);
+  $flag = $success ? 1 : 0;
+  $stmt = $mysqli->prepare('INSERT INTO login_attempts (email, ip_address, success) VALUES (?,?,?)');
+  if (!$stmt) return;
+  $stmt->bind_param('ssi', $email, $ip, $flag);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function add_report_status_history(int $reportId, ?string $oldStatus, string $newStatus, ?string $comment=''): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare('INSERT INTO report_status_history (report_id, actor_user_id, old_status, new_status, comment) VALUES (?,?,?,?,?)');
+  if (!$stmt) return;
+  $stmt->bind_param('iisss', $reportId, $uid, $oldStatus, $newStatus, $comment);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function report_quality_checks(array $data): array {
+  $warnings = [];
+  $summary = trim((string)($data['summary'] ?? ''));
+  $remarks = trim((string)($data['remarks'] ?? ''));
+  $purpose = trim((string)($data['purpose'] ?? ''));
+  $medicine = trim((string)($data['medicine_name'] ?? ''));
+  $hospital = trim((string)($data['hospital_name'] ?? ''));
+  if ($purpose === '') $warnings[] = 'Purpose is empty.';
+  if ($medicine === '') $warnings[] = 'Medicine is empty.';
+  if ($hospital === '') $warnings[] = 'Hospital / clinic is empty.';
+  if ($summary !== '' && mb_strlen($summary) < 20) $warnings[] = 'Summary looks very short.';
+  if ($remarks !== '' && mb_strlen($remarks) < 8) $warnings[] = 'Remarks look very short.';
+  return $warnings;
+}
+
+function find_potential_duplicate_reports(int $userId, string $doctorName, string $visitDatetime, int $excludeId=0): array {
+  global $mysqli;
+  $doctorName = trim($doctorName);
+  if ($userId <= 0 || $doctorName === '' || trim($visitDatetime) === '') return [];
+  $windowStart = date('Y-m-d H:i:s', strtotime($visitDatetime . ' -2 day'));
+  $windowEnd = date('Y-m-d H:i:s', strtotime($visitDatetime . ' +2 day'));
+  $sql = 'SELECT id, doctor_name, hospital_name, medicine_name, visit_datetime, status FROM reports WHERE user_id=? AND LOWER(TRIM(doctor_name))=LOWER(TRIM(?)) AND visit_datetime BETWEEN ? AND ?';
+  if ($excludeId > 0) $sql .= ' AND id<>?';
+  $sql .= ' ORDER BY visit_datetime DESC LIMIT 5';
+  $stmt = $mysqli->prepare($sql);
+  if (!$stmt) return [];
+  if ($excludeId > 0) $stmt->bind_param('isssi', $userId, $doctorName, $windowStart, $windowEnd, $excludeId);
+  else $stmt->bind_param('isss', $userId, $doctorName, $windowStart, $windowEnd);
+  $stmt->execute();
+  $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+  $stmt->close();
+  return $rows ?: [];
+}
+
 ?>
