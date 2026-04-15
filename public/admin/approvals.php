@@ -38,21 +38,15 @@ if ($res) while($row = $res->fetch_assoc()) $rows[] = $row;
 $slaSummary = fetch_approval_sla_summary();
 $title='Approvals'; include __DIR__.'/../header.php';
 ?>
-<div class="crm-hero">
-  <div>
-    <h2>Approval Queue</h2>
-    <div class="subtle">Fast review view for pending and returned reports.</div>
-  </div>
-  <div class="actions-inline"><div class="pill neutral"><?= (int)$total ?> result<?= $total===1?'':'s' ?></div><a class="btn" href="<?= url('admin/approval_sla.php') ?>">SLA View</a></div>
-</div>
+<?php ui_page_hero('Approval Queue', 'Fast review view for pending and returned reports.', '<div class="pill neutral">'.(int)$total.' result'.($total===1?'':'s').'</div><a class="btn" href="'.url('admin/approval_sla.php').'">SLA View</a>'); ?>
 <div class="summary-grid summary-grid-dashboard approvals-summary-grid">
-  <div class="card summary-card"><div class="summary-label">Pending</div><div class="summary-value"><?= (int)$slaSummary['pending_total'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Needs Changes</div><div class="summary-value"><?= (int)$slaSummary['needs_changes_total'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">24h+ Aging</div><div class="summary-value warning-text"><?= (int)$slaSummary['aging_warning'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Overdue</div><div class="summary-value danger-text"><?= (int)$slaSummary['overdue_total'] ?></div></div>
+  <?php ui_stat_card('Pending', (int)$slaSummary['pending_total'], 'Awaiting review'); ?>
+  <?php ui_stat_card('Needs Changes', (int)$slaSummary['needs_changes_total'], 'Returned to reps', 'warning'); ?>
+  <?php ui_stat_card('24h+ Aging', (int)$slaSummary['aging_warning'], 'Needs follow-up', 'warning'); ?>
+  <?php ui_stat_card('Overdue', (int)$slaSummary['overdue_total'], 'Past SLA target', 'danger'); ?>
 </div>
 <div class="card">
-  <form class="filters" method="get">
+  <?php ob_start(); ?>
     <label>Status
       <select name="status">
         <option value="pending" <?= $status==='pending'?'selected':'' ?>>Pending</option>
@@ -64,11 +58,7 @@ $title='Approvals'; include __DIR__.'/../header.php';
     <label>Date From<input type="date" name="date_from" value="<?= e($dateFrom) ?>"></label>
     <label>Date To<input type="date" name="date_to" value="<?= e($dateTo) ?>"></label>
     <label>Search<input type="text" name="q" value="<?= e($q) ?>" placeholder="Rep, doctor, hospital, medicine"></label>
-    <div class="actions-inline">
-      <button class="btn primary">Apply</button>
-      <a class="btn" href="<?= url('admin/approvals.php') ?>">Reset</a>
-    </div>
-  </form>
+  <?php $filterContent = ob_get_clean(); $filterAttrs = ['method'=>'get','class'=>'filters ui-filter-bar']; $filterResetUrl = url('admin/approvals.php'); include __DIR__.'/../partials/filter_bar.php'; ?>
   <div class="table-wrap">
     <table class="table">
       <thead><tr><th>Employee</th><th>Doctor</th><th>Medicine</th><th>Hospital</th><th>Visit</th><th>Status</th><th>Action</th></tr></thead>
@@ -82,7 +72,7 @@ $title='Approvals'; include __DIR__.'/../header.php';
           <td><?= e($row['medicine_name']) ?></td>
           <td><?= e($row['hospital_name']) ?></td>
           <td><?= e((string)$row['visit_datetime']) ?></td>
-          <td><span class="badge <?= e($row['status']) ?>"><?= e($row['status']) ?></span></td>
+          <td><?= ui_badge((string)$row['status'], (string)$row['status']) ?></td>
           <td><a class="btn tiny primary" href="report_view.php?id=<?= (int)$row['id'] ?>">Review</a></td>
         </tr>
       <?php endforeach; endif; ?>

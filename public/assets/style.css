@@ -280,3 +280,22 @@ hr{ border: none; height: 1px; background: linear-gradient(90deg, transparent, #
 @media (max-width: 640px){
   .sla-buckets,.sla-inline-grid{grid-template-columns:1fr}
 }
+
+
+/* Fix 17 reusable UI components */
+.ui-hero{margin-bottom:1rem}
+.ui-card-grid{margin-bottom:1rem}
+.ui-stat-card{position:relative;overflow:hidden}
+.ui-stat-card .summary-hint{margin-top:.35rem;font-size:.78rem;color:var(--muted)}
+.ui-tone-warning{border-color:#fde68a;background:#fffbeb}
+.ui-tone-danger{border-color:#fecaca;background:#fef2f2}
+.ui-tone-success{border-color:#bbf7d0;background:#ecfdf5}
+.ui-section-head{margin-bottom:.8rem;gap:1rem}
+.ui-filter-bar{align-items:end}
+.ui-filter-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.ui-badge{font-weight:700;text-transform:capitalize}
+.ui-empty-state{border:1px dashed var(--border);border-radius:14px;padding:1.2rem;text-align:center;background:#fafafa;color:var(--muted)}
+.ui-empty-icon{font-size:1.4rem;color:#9ca3af;margin-bottom:.35rem}
+.ui-empty-message{font-size:.95rem}
+.ui-empty-actions{margin-top:.8rem}
+.ui-table-shell{overflow:hidden}

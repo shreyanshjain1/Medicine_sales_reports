@@ -35,14 +35,6 @@ Medicine Sales CRM is an internal operations platform for field teams. It centra
 - Profile and Password Security
 
 ## Project structure
-
-### Internal architecture
-- `app/helpers/` - shared app, auth, CSRF, utility, and database helper functions
-- `app/services/` - business workflow services such as performance and approval SLA logic
-- `app/repositories/` - schema/bootstrap persistence helpers and DB-facing setup logic
-- `public/` - browser-routable pages and endpoints grouped by feature
-- `database/` - consolidated schema, demo seed, and legacy upgrade archive
-
 ```text
 Medicine_sales_reports-main/
 ├── .github/
@@ -147,3 +139,12 @@ public/
   manifest.webmanifest
   offline.html
 ```
+
+
+## Internal UI Layer
+
+This project includes a lightweight reusable UI layer for PHP page composition:
+
+- `app/components/ui_components.php` for stat cards, badges, section headers, page heroes, and empty states
+- `public/partials/filter_bar.php` for reusable filter action rows
+- `public/partials/table_shell.php` for reusable table section wrappers

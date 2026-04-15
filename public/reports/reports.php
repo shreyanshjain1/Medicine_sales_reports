@@ -49,26 +49,20 @@ elseif ($isDistrict) { $dmId=(int)user()['id']; $usersRes=$mysqli->query("SELECT
 else $usersRes = null;
 $title='Reports'; include __DIR__.'/../header.php';
 ?>
-<div class="crm-hero">
-  <div>
-    <h2>Reports</h2>
-    <div class="subtle">Filter, review, and manage field submissions in one CRM-style workspace.</div>
-  </div>
-  <div class="actions-inline">
-    <?php if($isManager || $isDistrict): ?><a class="btn" href="<?= url('admin/approvals.php') ?>">Open Approval Queue</a><?php endif; ?>
-    <a class="btn primary" href="<?= url('reports/report_add.php') ?>">Create Report</a>
-  </div>
-</div>
-<div class="kpi-strip">
-  <div class="metric"><div class="label">Total results</div><div class="value"><?= (int)$total ?></div><div class="hint">Current filtered dataset</div></div>
-  <div class="metric"><div class="label">Pending</div><div class="value"><?= (int)($stats['pending_count'] ?? 0) ?></div><div class="hint">Awaiting review</div></div>
-  <div class="metric"><div class="label">Doctors</div><div class="value"><?= (int)($stats['doctors_count'] ?? 0) ?></div><div class="hint">Unique doctors</div></div>
-  <div class="metric"><div class="label">Hospitals</div><div class="value"><?= (int)($stats['hospitals_count'] ?? 0) ?></div><div class="hint">Covered accounts</div></div>
-  <div class="metric"><div class="label">Medicines</div><div class="value"><?= (int)($stats['medicines_count'] ?? 0) ?></div><div class="hint">Products mentioned</div></div>
-  <div class="metric"><div class="label">Needs changes</div><div class="value"><?= (int)($stats['needs_changes_count'] ?? 0) ?></div><div class="hint">Returned to reps</div></div>
+<?php ob_start(); ?>
+<?php if($isManager || $isDistrict): ?><a class="btn" href="<?= url('admin/approvals.php') ?>">Open Approval Queue</a><?php endif; ?>
+<a class="btn primary" href="<?= url('reports/report_add.php') ?>">Create Report</a>
+<?php $reportsHeroActions = ob_get_clean(); ui_page_hero('Reports', 'Filter, review, and manage field submissions in one CRM-style workspace.', $reportsHeroActions); ?>
+<div class="summary-grid summary-grid-dashboard">
+  <?php ui_stat_card('Total Results', (int)$total, 'Current filtered dataset'); ?>
+  <?php ui_stat_card('Pending', (int)($stats['pending_count'] ?? 0), 'Awaiting review', 'warning'); ?>
+  <?php ui_stat_card('Doctors', (int)($stats['doctors_count'] ?? 0), 'Unique doctors'); ?>
+  <?php ui_stat_card('Hospitals', (int)($stats['hospitals_count'] ?? 0), 'Covered accounts'); ?>
+  <?php ui_stat_card('Medicines', (int)($stats['medicines_count'] ?? 0), 'Products mentioned'); ?>
+  <?php ui_stat_card('Needs Changes', (int)($stats['needs_changes_count'] ?? 0), 'Returned to reps', 'danger'); ?>
 </div>
 <div class="card">
-  <form class="filters filters-6" method="get">
+  <?php ob_start(); ?>
     <?php if($isManager || $isDistrict): ?>
     <label>Employee
       <select name="employee_id">
@@ -91,12 +85,7 @@ $title='Reports'; include __DIR__.'/../header.php';
     <label>Medicine<input type="text" name="medicine" value="<?= e($medicine) ?>" placeholder="Medicine name"></label>
     <label>Hospital<input type="text" name="hospital" value="<?= e($hospital) ?>" placeholder="Hospital / clinic"></label>
     <label class="span-2">Keyword Search<input name="q" value="<?= e($q) ?>" placeholder="Rep, doctor, hospital, medicine, purpose"></label>
-    <div class="actions-inline span-2">
-      <button class="btn primary">Apply</button>
-      <a class="btn" href="<?= url('reports/reports.php') ?>">Reset</a>
-      <?php if($isManager): ?><a class="btn" href="exports.php?<?= e(http_build_query($_GET)) ?>">Export Filtered CSV</a><?php endif; ?>
-    </div>
-  </form>
+  <?php $filterContent = ob_get_clean(); $filterAttrs = ['method'=>'get','class'=>'filters filters-6 ui-filter-bar']; $filterResetUrl = url('reports/reports.php'); ob_start(); ?><?php if($isManager): ?><a class="btn" href="<?= url('admin/exports.php?' . http_build_query($_GET)) ?>">Export Filtered CSV</a><?php endif; ?><?php $filterSecondaryHtml = ob_get_clean(); include __DIR__.'/../partials/filter_bar.php'; ?>
   <div class="table-wrap">
     <table class="table">
       <thead><tr><?php if($isManager || $isDistrict): ?><th>Employee</th><?php endif; ?><th>Doctor</th><th>Purpose</th><th>Medicine</th><th>Hospital</th><th>Visit</th><th>Status</th><th>Actions</th></tr></thead>
@@ -110,7 +99,7 @@ $title='Reports'; include __DIR__.'/../header.php';
           <td><?= e($r['medicine_name']) ?></td>
           <td><?= e($r['hospital_name']) ?></td>
           <td><?= $r['visit_datetime'] ? e(date('Y-m-d H:i', strtotime($r['visit_datetime']))) : '—' ?></td>
-          <td><span class="badge <?= e($r['status'] ?: 'pending') ?>"><?= e($r['status'] ?: 'pending') ?></span></td>
+          <td><?= ui_badge((string)($r['status'] ?: 'pending'), (string)($r['status'] ?: 'pending')) ?></td>
           <td><div class="actions-inline"><a class="btn tiny" href="report_view.php?id=<?= (int)$r['id'] ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="report_edit.php?id=<?= (int)$r['id'] ?>">Edit</a><?php endif; ?></div></td>
         </tr>
       <?php endforeach; endif; ?>
