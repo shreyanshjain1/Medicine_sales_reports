@@ -56,8 +56,6 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="<?= $active==='admin_tasks.php'?'active':'' ?>" href="<?= url('admin_tasks.php') ?>">Tasks</a>
       <a class="<?= in_array($active,['admin_users.php','user_add.php','user_edit.php'])?'active':'' ?>" href="<?= url('admin_users.php') ?>">Users</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Export</a>
-      <a class="<?= $active==='manager_summary.php'?'active':'' ?>" href="<?= url('manager_summary.php') ?>">Summary</a>
-      <a class="<?= $active==='digest_builder.php'?'active':'' ?>" href="<?= url('digest_builder.php') ?>">Digest</a>
     <?php endif; ?>
     <?php if (is_manager() || is_district_manager()): ?>
       <a class="<?= $active==='performance.php'?'active':'' ?>" href="<?= url('performance.php') ?>">Performance</a>
@@ -183,9 +181,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="btn block primary titlecase" href="<?= url('report_add.php') ?>">Add New Report</a>
       <?php if (is_manager() || is_district_manager()): ?>
         <a class="btn block titlecase" href="<?= url('performance.php') ?>">Performance KPIs</a>
-      <?php endif; ?>
-      <?php if (is_manager()): ?>
-        <a class="btn block titlecase" href="<?= url('manager_summary.php') ?>">Manager Summary</a>
+        <a class="btn block titlecase" href="<?= url('approval_sla.php') ?>">Approval SLA</a>
       <?php endif; ?>
     </div>
   </div>

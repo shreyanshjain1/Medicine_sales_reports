@@ -1,5 +1,5 @@
 <?php $title='Dashboard'; include __DIR__.'/header.php'; ?>
-<?php $perf = fetch_performance_overview(current_target_month()); $perfSummary = $perf['summary']; ?>
+<?php $perf = fetch_performance_overview(current_target_month()); $perfSummary = $perf['summary']; $slaSummary = (is_manager() || is_district_manager()) ? fetch_approval_sla_summary() : null; $overdueQuick = (is_manager() || is_district_manager()) ? fetch_overdue_reports(5) : []; ?>
 
 <div class="summary-grid summary-grid-dashboard">
   <div class="card summary-card"><div class="summary-label">This Month Reports</div><div class="summary-value"><?= (int)$perfSummary['total_reports'] ?></div></div>
@@ -7,6 +7,40 @@
   <div class="card summary-card"><div class="summary-label">Pending</div><div class="summary-value"><?= (int)$perfSummary['total_pending'] ?></div></div>
   <div class="card summary-card"><div class="summary-label">Doctor Coverage</div><div class="summary-value"><?= (int)$perfSummary['total_doctors'] ?></div></div>
 </div>
+
+<?php if (is_manager() || is_district_manager()): ?>
+<div class="card">
+  <div class="flex-between">
+    <h2 class="titlecase">Approval SLA Snapshot</h2>
+    <a class="btn tiny" href="<?= url('approval_sla.php') ?>">Open SLA View</a>
+  </div>
+  <div class="sla-inline-grid">
+    <div class="sla-inline-item"><span class="muted">Pending</span><strong><?= (int)($slaSummary['pending_total'] ?? 0) ?></strong></div>
+    <div class="sla-inline-item"><span class="muted">24h+</span><strong class="warning-text"><?= (int)($slaSummary['aging_warning'] ?? 0) ?></strong></div>
+    <div class="sla-inline-item"><span class="muted">Overdue</span><strong class="danger-text"><?= (int)($slaSummary['overdue_total'] ?? 0) ?></strong></div>
+    <div class="sla-inline-item"><span class="muted">Avg Approval</span><strong><?= e((string)($slaSummary['avg_hours_to_approve'] ?? 0)) ?>h</strong></div>
+  </div>
+  <?php if ($overdueQuick): ?>
+    <div class="table-wrap" style="margin-top:.75rem">
+      <table class="table">
+        <thead><tr><th>Rep</th><th>Doctor</th><th>Age</th><th></th></tr></thead>
+        <tbody>
+          <?php foreach($overdueQuick as $row): ?>
+            <tr>
+              <td><?= e($row['employee']) ?></td>
+              <td><?= e($row['doctor_name']) ?></td>
+              <td><span class="pill danger"><?= (int)$row['age_hours'] ?>h</span></td>
+              <td><a class="btn tiny" href="report_view.php?id=<?= (int)$row['id'] ?>">Open</a></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php else: ?>
+    <div class="muted small" style="margin-top:.75rem">No overdue approvals right now.</div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <div class="grid three">
   <div class="card stretch">
@@ -110,25 +144,6 @@
       <p class="muted" style="margin-top:.75rem">Use the performance page for monthly target setting and rep-by-rep attainment tracking.</p>
     </div>
     <?php endif; ?>
-
-    <?php if (is_manager()): ?>
-    <div class="card">
-      <div class="flex-between">
-        <h2 class="titlecase">Manager Summary</h2>
-        <a class="btn tiny" href="<?= url('manager_summary.php') ?>">Open Summary</a>
-      </div>
-      <div class="mini-kpi-list">
-        <div class="mini-kpi"><span>Total Active Reps</span><strong><?= (int)($perf['summary']['total_reports'] ?? 0) ?></strong></div>
-        <div class="mini-kpi"><span>Approved This Month</span><strong><?= (int)$perfSummary['total_approved'] ?></strong></div>
-      </div>
-      <p class="muted" style="margin-top:.75rem">Use the printable manager summary and digest builder for leadership updates and client-ready snapshots.</p>
-      <div class="actions-inline" style="margin-top:.75rem">
-        <a class="btn" href="<?= url('manager_summary.php') ?>">Printable Summary</a>
-        <a class="btn primary" href="<?= url('digest_builder.php') ?>">Build Digest</a>
-      </div>
-    </div>
-    <?php endif; ?>
-
   </div>
 </div>
 
