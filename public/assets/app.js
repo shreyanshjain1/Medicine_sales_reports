@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // If server didn’t preload cities, fetch them
   if (citySel.options.length <= 1) {
     try {
-      const r = await fetch('api_doctors.php?mode=cities', {cache:'no-store'});
+      const r = await fetch(window.BASE_URL + '/api/api_doctors.php?mode=cities', {cache:'no-store'});
       const j = await r.json();
       (j.cities||[]).forEach(c=>{
         const o = document.createElement('option');
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if (!c) return;
 
     try{
-      const r = await fetch('api_doctors.php?city=' + encodeURIComponent(c), {cache:'no-store'});
+      const r = await fetch(window.BASE_URL + '/api/api_doctors.php?city=' + encodeURIComponent(c), {cache:'no-store'});
       const j = await r.json();
       const list = j.doctors || [];
 
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   async function isActuallyOnline(){
     try {
-      const r = await fetch('ping.php?ts=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' });
+      const r = await fetch(window.BASE_URL + '/api/ping.php?ts=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' });
       return !!(r && (r.ok || r.status === 204));
     } catch (e) {
       return false;
@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       items: items.map(x => x.payload)
     });
 
-    const res = await fetch('api_sync_reports.php', {
+    const res = await fetch(window.BASE_URL + '/api/api_sync_reports.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',

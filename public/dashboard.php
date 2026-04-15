@@ -12,7 +12,7 @@
 <div class="card">
   <div class="flex-between">
     <h2 class="titlecase">Approval SLA Snapshot</h2>
-    <a class="btn tiny" href="<?= url('approval_sla.php') ?>">Open SLA View</a>
+    <a class="btn tiny" href="<?= url('admin/approval_sla.php') ?>">Open SLA View</a>
   </div>
   <div class="sla-inline-grid">
     <div class="sla-inline-item"><span class="muted">Pending</span><strong><?= (int)($slaSummary['pending_total'] ?? 0) ?></strong></div>
@@ -61,7 +61,7 @@
       <div class="flex-between">
         <h2 class="titlecase">KPIs</h2>
         <?php if (is_manager() || is_district_manager()): ?>
-          <a class="btn tiny" href="<?= url('performance.php') ?>">Open Performance</a>
+          <a class="btn tiny" href="<?= url('admin/performance.php') ?>">Open Performance</a>
         <?php endif; ?>
       </div>
 
@@ -76,7 +76,7 @@
   window.addEventListener('load', () => {
     if (!window.Chart) return;
 
-    fetch('chart_data.php')
+    fetch('api/chart_data.php')
       .then(r=>r.json())
       .then(d=>{
         new Chart(document.getElementById('chartEmployees'),{
@@ -111,7 +111,7 @@
   <script>
   window.addEventListener('load', () => {
     if (!window.Chart) return;
-    fetch('chart_data.php?mine=1')
+    fetch('api/chart_data.php?mine=1')
       .then(r=>r.json())
       .then(d=>{
         new Chart(document.getElementById('chartMine'),{
@@ -157,7 +157,7 @@ window.addEventListener('load', async () => {
 
   let eventsRaw = [];
   try {
-    const resp = await fetch('api_events.php');
+    const resp = await fetch('api/api_events.php');
     eventsRaw = await resp.json();
   } catch (e) {
     eventsRaw = [];

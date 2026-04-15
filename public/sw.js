@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // API GET: network-first with cache fallback
-  if (url.pathname.endsWith('/api_doctors.php') || url.pathname.endsWith('/api_events.php') || url.pathname.endsWith('/chart_data.php')) {
+  if (url.pathname.endsWith('/api/api_doctors.php') || url.pathname.endsWith('/api/api_events.php') || url.pathname.endsWith('/api/chart_data.php')) {
     event.respondWith(
       fetch(req)
         .then(res => {
