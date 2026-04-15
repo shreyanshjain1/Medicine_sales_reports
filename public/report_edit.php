@@ -5,7 +5,7 @@ $stmt=$mysqli->prepare('SELECT * FROM reports WHERE id=?'); $stmt->bind_param('i
 if(!$r){ http_response_code(404); exit('Not found'); }
 if(!is_manager() && (int)$r['user_id']!== (int)user()['id']){ http_response_code(403); exit('Forbidden'); }
 if(($r['status'] ?? 'pending')==='approved' && !is_manager()){ http_response_code(403); exit('Approved reports cannot be edited.'); }
-$errors=[]; $ok=false;
+$errors=[]; $warnings=[]; $duplicates=[]; $ok=false;
 $doctorMasterRecords = fetch_doctor_master_records();
 $medicineOptions = fetch_master_options('medicines_master');
 $hospitalOptions = fetch_master_options('hospitals_master');
@@ -19,12 +19,21 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   $newAttachment = save_uploaded_attachment($_FILES['attachment'] ?? [], (int)user()['id'], $errors);
   if ($newAttachment) $attachment_path = $newAttachment;
   if($doctor_name==='' || $visit_dt==='') $errors[]='Doctor name and visit date/time are required.';
+  $warnings = report_quality_checks([
+    'purpose' => $purpose,
+    'medicine_name' => $medicine_name,
+    'hospital_name' => $hospital_name,
+    'summary' => $summary,
+    'remarks' => $remarks,
+  ]);
+  $duplicates = find_potential_duplicate_reports((int)user()['id'], $doctor_name, $visit_dt, $id);
   if(!$errors){
     $stmt=$mysqli->prepare('UPDATE reports SET doctor_name=?,doctor_email=?,purpose=?,medicine_name=?,hospital_name=?,visit_datetime=?,summary=?,remarks=?,attachment_path=?,status=? WHERE id=?');
     $stmt->bind_param('ssssssssssi',$doctor_name,$doctor_email,$purpose,$medicine_name,$hospital_name,$visit_dt,$summary,$remarks,$attachment_path,$status,$id);
     if($stmt->execute()){
       $ok=true;
       log_audit('report_updated', 'report', $id, 'Report edited');
+      add_report_status_history($id, $r['status'] ?? null, $status, 'Report details updated');
       $r=array_merge($r,['doctor_name'=>$doctor_name,'doctor_email'=>$doctor_email,'purpose'=>$purpose,'medicine_name'=>$medicine_name,'hospital_name'=>$hospital_name,'visit_datetime'=>$visit_dt,'summary'=>$summary,'remarks'=>$remarks,'attachment_path'=>$attachment_path,'status'=>$status]);
     } else $errors[]='Failed to update report.';
     $stmt->close();
@@ -36,6 +45,8 @@ $title='Edit Report #'.$id; include __DIR__.'/header.php';
 <div class="card">
   <?php if($ok): ?><div class="alert success">Report updated.</div><?php endif; ?>
   <?php if($errors): ?><div class="alert danger"><?php foreach($errors as $e) echo '<div>'.e($e).'</div>'; ?></div><?php endif; ?>
+  <?php if($warnings): ?><div class="alert warning"><strong>Submission quality checks</strong><?php foreach($warnings as $w) echo '<div>'.e($w).'</div>'; ?></div><?php endif; ?>
+  <?php if($duplicates): ?><div class="alert warning"><strong>Possible duplicate reports found</strong><?php foreach($duplicates as $dup) echo '<div>Report #'.(int)$dup['id'].' · '.e((string)$dup['doctor_name']).' · '.e((string)$dup['visit_datetime']).' · '.e((string)($dup['status'] ?: 'pending')).'</div>'; ?></div><?php endif; ?>
   <form method="post" class="form" enctype="multipart/form-data"><?php csrf_input(); ?>
     <div class="grid two">
       <label>Load From Doctor Master

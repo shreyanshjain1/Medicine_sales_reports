@@ -256,3 +256,6 @@ hr{ border: none; height: 1px; background: linear-gradient(90deg, transparent, #
   .page-head{align-items:stretch}
   .inline-form{width:100%}
 }
+
+
+.alert.warning{background:#fff7ed;border:1px solid #fdba74;color:#9a3412}

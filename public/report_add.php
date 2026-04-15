@@ -72,6 +72,8 @@ if ($prefill && $event_id) {
 }
 
 $errors = [];
+$warnings = [];
+$duplicates = [];
 $ok = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -91,6 +93,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Validate (lightweight; offline flow also validates in JS)
   if ($doctor_name === '') $errors[] = 'Doctor Name is required.';
   if ($visit_datetime === '') $errors[] = 'Visit Date/Time is required.';
+
+  $warnings = report_quality_checks([
+    'purpose' => $purpose,
+    'medicine_name' => $medicine_name,
+    'hospital_name' => $hospital_name,
+    'summary' => $summary,
+    'remarks' => $remarks,
+  ]);
+  $duplicates = find_potential_duplicate_reports((int)user()['id'], $doctor_name, $visit_datetime);
 
   $attachment_path = null;
 
@@ -155,6 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
 
     if ($rid > 0) {
+      log_audit('report_created', 'report', $rid, 'Report submitted');
+      add_report_status_history($rid, null, 'pending', 'Initial submission');
       $notifyIds = notification_recipient_ids_for_report_owner($uid);
       if ($notifyIds) {
         notify_many(
@@ -198,6 +211,24 @@ include __DIR__.'/header.php';
     <div class="alert">
       <?php foreach ($errors as $e): ?>
         <div><?= e($e) ?></div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+
+  <?php if ($warnings): ?>
+    <div class="alert warning">
+      <strong>Submission quality checks</strong>
+      <?php foreach ($warnings as $w): ?>
+        <div><?= e($w) ?></div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+
+  <?php if ($duplicates): ?>
+    <div class="alert warning">
+      <strong>Possible duplicate reports found</strong>
+      <?php foreach ($duplicates as $dup): ?>
+        <div>Report #<?= (int)$dup['id'] ?> · <?= e((string)$dup['doctor_name']) ?> · <?= e((string)$dup['visit_datetime']) ?> · <?= e((string)($dup['status'] ?: 'pending')) ?></div>
       <?php endforeach; ?>
     </div>
   <?php endif; ?>
