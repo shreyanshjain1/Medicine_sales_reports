@@ -110,6 +110,25 @@
       <p class="muted" style="margin-top:.75rem">Use the performance page for monthly target setting and rep-by-rep attainment tracking.</p>
     </div>
     <?php endif; ?>
+
+    <?php if (is_manager()): ?>
+    <div class="card">
+      <div class="flex-between">
+        <h2 class="titlecase">Manager Summary</h2>
+        <a class="btn tiny" href="<?= url('manager_summary.php') ?>">Open Summary</a>
+      </div>
+      <div class="mini-kpi-list">
+        <div class="mini-kpi"><span>Total Active Reps</span><strong><?= (int)($perf['summary']['total_reports'] ?? 0) ?></strong></div>
+        <div class="mini-kpi"><span>Approved This Month</span><strong><?= (int)$perfSummary['total_approved'] ?></strong></div>
+      </div>
+      <p class="muted" style="margin-top:.75rem">Use the printable manager summary and digest builder for leadership updates and client-ready snapshots.</p>
+      <div class="actions-inline" style="margin-top:.75rem">
+        <a class="btn" href="<?= url('manager_summary.php') ?>">Printable Summary</a>
+        <a class="btn primary" href="<?= url('digest_builder.php') ?>">Build Digest</a>
+      </div>
+    </div>
+    <?php endif; ?>
+
   </div>
 </div>
 
