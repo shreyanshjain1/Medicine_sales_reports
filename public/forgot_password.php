@@ -2,7 +2,7 @@
 require_once __DIR__.'/../init.php';
 if(is_logged_in()){ header('Location: '.url('dashboard.php')); exit; }
 $title='Forgot Password';
-$error=''; $ok=''; $resetLink='';
+$error=''; $ok=''; $resetLink=''; $mailNotice='';
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_verify();
   $email = normalize_email((string)post('email',''));
@@ -17,6 +17,11 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($u && (int)$u['active']===1){
       $token = create_password_reset_token((int)$u['id']);
       $resetLink = url('reset_password.php?selector=' . urlencode($token['selector']) . '&validator=' . urlencode($token['validator']));
+      $subject = APP_NAME . ' · Reset your password';
+      $body = 'A password reset was requested for your account. Use the secure link below to set a new password. This link expires at ' . date('M d, Y h:i A', strtotime($token['expires_at'])) . '.';
+      $html = notification_email_html('Reset your password', $body, $resetLink);
+      $sent = send_app_mail((string)$u['email'], $subject, $html, $body, 'user', (int)$u['id']);
+      $mailNotice = $sent ? 'A reset email was sent to the account email.' : 'Email delivery is not active yet, so the reset link is shown below for testing.';
       log_audit('password_reset_requested', 'user', (int)$u['id'], 'Password reset requested');
     }
     $ok='If the account exists and is active, a password reset link has been generated.';
@@ -33,6 +38,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       <p class="subtitle">Generate a secure reset link for your account.</p>
       <?php if($error): ?><div class="alert"><?= e($error) ?></div><?php endif; ?>
       <?php if($ok): ?><div class="alert success"><?= e($ok) ?></div><?php endif; ?>
+      <?php if($mailNotice): ?><div class="inline-note"><?= e($mailNotice) ?></div><?php endif; ?>
       <form method="post" class="form compact">
         <?php csrf_input(); ?>
         <label>Email<input type="email" name="email" required placeholder="you@pharmastar.ph" autofocus></label>
