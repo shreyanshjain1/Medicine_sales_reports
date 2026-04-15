@@ -1,9 +1,14 @@
 /vendor/
 /node_modules/
-/uploads/
 /public/assets/.cache/
 *.env
 config.php
 public/error_log
+storage/logs/*.log
+storage/logs/*.txt
+uploads/attachments/*
+!uploads/attachments/.gitkeep
+uploads/signatures/*
+!uploads/signatures/.gitkeep
 .DS_Store
 Thumbs.db
