@@ -1,66 +1,38 @@
 # Medicine Sales CRM
 
-A business-focused PHP + MySQL CRM-style reporting platform built for medical representatives, district managers, and managers. The system is designed to centralize field visit reporting, approval workflows, team oversight, exports, and operational visibility in a shared-hosting-friendly stack.
+A business-focused PHP + MySQL CRM-style field reporting platform for medical representatives, district managers, and managers. The project is built to run cleanly on shared hosting while still covering approvals, notifications, performance tracking, exports, digests, and review workflows.
 
 ![PHP](https://img.shields.io/badge/PHP-8%2B-777BB4?logo=php&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?logo=mysql&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Business%20Ready-0f766e)
-![Architecture](https://img.shields.io/badge/Architecture-Procedural%20PHP-1f2937)
-![Workflow](https://img.shields.io/badge/Workflow-Reports%20%26%20Approvals-7c3aed)
+![MySQL](https://img.shields.io/badge/MySQL-8%2FMariaDB-4479A1?logo=mysql&logoColor=white)
+![Workflow](https://img.shields.io/badge/Workflow-CRM%20Style-7c3aed)
+![Status](https://img.shields.io/badge/Status-Operations%20Ready-0f766e)
 
-## Overview
-Medicine Sales CRM helps sales teams log doctor visits, capture field activity, manage tasks, route reports for approval, and export filtered business data for management review. It is intentionally built in procedural PHP so it remains easy to maintain, deploy, and extend on cPanel, Apache, XAMPP, and other simple shared-hosting setups.
+## What this project is
+Medicine Sales CRM is an internal operations platform for field teams. It centralizes visit reporting, manager approvals, task scheduling, territory performance, notifications, exports, and summary generation in a single procedural PHP application.
 
-This version focuses on three outcomes:
-- cleaner CRM-style UI
-- safer production behavior
-- stronger manager workflow visibility
+## Highlights
+- role-based access for manager, district manager, and employee
+- report submission with attachments, signatures, duplicate warnings, and quality checks
+- approval queue, approval SLA tracking, and report activity timelines
+- dashboard KPIs, performance tracking, and territory views
+- notification center and email-ready workflow hooks
+- master-data pages for doctors, hospitals, and medicines
+- manager summary and digest builder for leadership updates
+- shared-hosting-friendly structure without a heavy framework dependency
 
-## Core capabilities
-- Role-based access for `manager`, `district_manager`, and `employee`
-- Report creation and editing with attachments and signatures
-- Approval queue for manager-side review
-- Dashboard with KPIs, charts, and calendar visibility
-- Task and visit scheduling flow
-- CSV exports with business-friendly filters
-- PWA/offline groundwork with sync support
-- Audit and status history foundation
-
-## What makes this project strong
-- Business-oriented workflow instead of a generic CRUD demo
-- Shared-hosting friendly stack without heavy framework lock-in
-- CRM-like layout and manager-first reporting flow
-- Upgrade-safe SQL path for fresh installs and existing deployments
-- Security cleanup around setup and developer tools
-
-## Security and stability upgrades in this version
-- `setup.php` is disabled unless explicitly allowed in config
-- setup requires a private setup key
-- public password-reset debug script is deprecated
-- diagnostics require manager session plus dev-tool key access
-- login attempt tracking and throttling support included
-- audit log and report status history tables included
-- report attachment path handling made consistent
-
-## Screens / modules
+## Modules
 - Dashboard
 - Reports
-- Report View
-- Report Add / Edit
 - Approval Queue
-- Export Center
-- User Administration
-- Task / Visit Scheduling
-- Profile Settings
-
-## Tech stack
-- PHP 8+
-- MySQL / MariaDB
-- Vanilla JavaScript
-- Chart.js
-- Toast UI Calendar
-- Select2
-- Bootstrap-style utility approach via custom CSS
+- Approval SLA
+- Performance
+- Notifications
+- Activity Logs
+- Manager Summary
+- Digest Builder
+- Doctors / Hospitals / Medicines Masters
+- Users and Tasks
+- Profile and Password Security
 
 ## Project structure
 ```text
@@ -71,73 +43,76 @@ Medicine_sales_reports-main/
 ├── config.example.php
 ├── init.php
 ├── database/
-│   ├── full_schema.sql
-│   └── upgrade_v2.sql
+│   ├── schema.sql
+│   ├── seed_demo.sql
+│   ├── legacy_upgrade_bundle.sql
+│   ├── README.md
+│   └── upgrade_v*.sql
 ├── public/
+│   ├── activity_logs.php
+│   ├── admin_tasks.php
+│   ├── admin_users.php
+│   ├── approval_sla.php
 │   ├── approvals.php
+│   ├── change_password.php
 │   ├── dashboard.php
+│   ├── digest_builder.php
+│   ├── doctors_master.php
+│   ├── event_add.php
 │   ├── exports.php
+│   ├── forgot_password.php
+│   ├── header.php
+│   ├── hospitals_master.php
+│   ├── index.php
+│   ├── manager_summary.php
+│   ├── medicines_master.php
+│   ├── notifications.php
+│   ├── performance.php
+│   ├── profile.php
 │   ├── report_add.php
 │   ├── report_edit.php
 │   ├── report_view.php
 │   ├── reports.php
-│   ├── admin_users.php
-│   ├── admin_tasks.php
+│   ├── reset_password.php
 │   ├── setup.php
+│   ├── task_edit.php
 │   ├── tools/
-│   │   ├── diagnose.php
-│   │   └── reset_password.php
 │   └── assets/
+├── storage/
+│   └── logs/
 └── uploads/
     ├── attachments/
     └── signatures/
 ```
 
+## Database layout
+This repo now includes a cleaner database structure:
+- `database/schema.sql` is the single consolidated schema for fresh installs
+- `database/seed_demo.sql` is an optional seed template
+- `database/legacy_upgrade_bundle.sql` is a convenience reference for older installs
+- legacy `upgrade_v*.sql` files are still kept for backward compatibility and patch history
+
 ## Setup
 ### Fresh install
 1. Copy `config.example.php` to `config.php`
-2. Update database credentials and secrets in `config.php`
-3. Import `database/full_schema.sql`
-4. Make sure these folders are writable:
+2. Set your database credentials and secrets in `config.php`
+3. Import `database/schema.sql`
+4. Ensure these folders are writable:
    - `uploads/attachments`
    - `uploads/signatures`
+   - `storage/logs`
 5. Open `public/`
 
-### Existing project upgrade
-1. Back up your current database and project files
-2. Copy the updated project files into your repo
-3. Import `database/upgrade_v2.sql`
-4. Copy `config.example.php` only if you need a new template reference
-5. Verify login, approvals, exports, and report creation
+### Existing install
+1. Back up your current database and files
+2. Copy in the updated project files
+3. Prefer aligning older databases to the consolidated structure manually, or use the legacy upgrade SQL files if needed
+4. Keep `config.php` intact
 
-## Security notes
-- Keep `ALLOW_SETUP` off in production
-- Change `CSRF_SECRET`, `SETUP_KEY`, and `DEV_TOOL_KEY`
-- Do not expose temporary debug utilities publicly
-- Remove stray log files from web-accessible folders
+## Notes
+- `setup.php` now reads from the consolidated schema file instead of duplicating table definitions inline
+- the app bootstraps missing `uploads/` and `storage/` folders automatically on startup
+- `public/error_log` should not be committed; runtime logs belong in `storage/logs/`
 
-## SQL files
-### `database/full_schema.sql`
-Use for fresh installs.
-
-### `database/upgrade_v2.sql`
-Use for patching an existing deployment.
-
-## GitHub workflow included
-This patch adds a GitHub Actions workflow:
-- `PHP Lint` on every push to `main`
-- `PHP Lint` on every pull request
-
-It runs `php -l` against all PHP files so broken syntax gets caught before merge.
-
-## Why this repo stands out
-This is not just a school CRUD project. It is a role-aware internal business platform aimed at real operations: field reporting, approvals, district oversight, exports, auditability, and deployment practicality.
-
-## Roadmap direction
-Recommended next additions:
-- doctor master CRUD
-- medicine master CRUD
-- hospital / clinic master CRUD
-- password change / forgot-password flow
-- notification center
-- target tracking and approval aging widgets
+## Why this version is stronger
+This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, cleaner repo structure, consolidated database source-of-truth, and better separation between app files, uploads, and runtime logs.

@@ -6,6 +6,24 @@ $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($mysqli->connect_error) die('DB Connection failed: ' . $mysqli->connect_error);
 $mysqli->set_charset('utf8mb4');
 
+
+if (!defined('APP_SCHEMA_VERSION')) define('APP_SCHEMA_VERSION', 'v14');
+
+function ensure_app_directories(): void {
+  foreach ([
+    __DIR__ . '/uploads',
+    __DIR__ . '/uploads/attachments',
+    __DIR__ . '/uploads/signatures',
+    __DIR__ . '/storage',
+    __DIR__ . '/storage/logs',
+  ] as $dir) {
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+  }
+}
+
+ensure_app_directories();
+
+
 /* ---------------------------------------------------------
    Lightweight, safe schema migrations (prevents blank views)
    ---------------------------------------------------------
