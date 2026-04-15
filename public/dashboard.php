@@ -1,9 +1,12 @@
 <?php $title='Dashboard'; include __DIR__.'/header.php'; ?>
-<?php
-$myRecentNotifications = notifications_recent((int)(user()['id'] ?? 0), 6);
-$myUnreadNotifications = notifications_unread_count((int)(user()['id'] ?? 0));
-?>
+<?php $perf = fetch_performance_overview(current_target_month()); $perfSummary = $perf['summary']; ?>
 
+<div class="summary-grid summary-grid-dashboard">
+  <div class="card summary-card"><div class="summary-label">This Month Reports</div><div class="summary-value"><?= (int)$perfSummary['total_reports'] ?></div></div>
+  <div class="card summary-card"><div class="summary-label">Approved</div><div class="summary-value"><?= (int)$perfSummary['total_approved'] ?></div></div>
+  <div class="card summary-card"><div class="summary-label">Pending</div><div class="summary-value"><?= (int)$perfSummary['total_pending'] ?></div></div>
+  <div class="card summary-card"><div class="summary-label">Doctor Coverage</div><div class="summary-value"><?= (int)$perfSummary['total_doctors'] ?></div></div>
+</div>
 
 <div class="grid three">
   <div class="card stretch">
@@ -19,8 +22,14 @@ $myUnreadNotifications = notifications_unread_count((int)(user()['id'] ?? 0));
     <div id="calendar" class="tui-cal" style="height:70vh; min-height:620px;"></div>
   </div>
 
-  <div class="card kpi-card">
-    <h2 class="titlecase">KPIs</h2>
+  <div class="vstack gap-s">
+    <div class="card kpi-card">
+      <div class="flex-between">
+        <h2 class="titlecase">KPIs</h2>
+        <?php if (is_manager() || is_district_manager()): ?>
+          <a class="btn tiny" href="<?= url('performance.php') ?>">Open Performance</a>
+        <?php endif; ?>
+      </div>
 
 <?php if(in_array(user()['role'] ?? '', ['manager','district_manager'], true)): ?>
   <div class="kpi-grid">
@@ -31,7 +40,6 @@ $myUnreadNotifications = notifications_unread_count((int)(user()['id'] ?? 0));
 
   <script>
   window.addEventListener('load', () => {
-    // Chart.js is loaded (defer) only on this page. If offline and it fails to load, skip charts.
     if (!window.Chart) return;
 
     fetch('chart_data.php')
@@ -86,58 +94,27 @@ $myUnreadNotifications = notifications_unread_count((int)(user()['id'] ?? 0));
   </script>
 <?php endif; ?>
 
-  </div>
-</div>
+    </div>
 
-<div class="grid two" style="margin-top:1rem">
-  <div class="card">
-    <div class="flex between center wrap-gap">
-      <div>
-        <h2 class="titlecase" style="margin:0">Notification Center</h2>
-        <p class="muted" style="margin:.35rem 0 0">Unread alerts: <strong><?= (int)$myUnreadNotifications ?></strong></p>
+    <?php if (is_manager() || is_district_manager()): ?>
+    <div class="card">
+      <div class="flex-between">
+        <h2 class="titlecase">Territory Snapshot</h2>
+        <span class="pill-soft"><?= e(current_target_month()) ?></span>
       </div>
-      <a class="btn primary" href="<?= url('notifications.php') ?>">Open Notifications</a>
+      <div class="mini-kpi-list">
+        <div class="mini-kpi"><span>Target Achievement</span><strong><?= (int)$perfSummary['achievement_pct'] ?>%</strong></div>
+        <div class="mini-kpi"><span>Hospital Reach</span><strong><?= (int)$perfSummary['total_hospitals'] ?></strong></div>
+        <div class="mini-kpi"><span>Medicine Reach</span><strong><?= (int)$perfSummary['total_medicines'] ?></strong></div>
+      </div>
+      <p class="muted" style="margin-top:.75rem">Use the performance page for monthly target setting and rep-by-rep attainment tracking.</p>
     </div>
-
-    <div class="notification-list compact" style="margin-top:1rem">
-      <?php if (!$myRecentNotifications): ?>
-        <div class="empty-state">
-          <h3 class="titlecase">No recent alerts</h3>
-          <p class="muted">New report submissions, review outcomes, and task assignments will appear here.</p>
-        </div>
-      <?php else: ?>
-        <?php foreach ($myRecentNotifications as $n): ?>
-          <a class="notif-item compact <?= (int)$n['is_read']===0 ? 'unread' : '' ?>" href="<?= e($n['action_url'] ?: url('notifications.php')) ?>">
-            <div class="notif-main">
-              <div class="notif-meta">
-                <span class="pill"><?= e($n['type']) ?></span>
-                <span class="muted"><?= e(date('M d, Y h:i A', strtotime((string)$n['created_at']))) ?></span>
-              </div>
-              <h3><?= e($n['title']) ?></h3>
-              <?php if (!empty($n['body'])): ?><p><?= e($n['body']) ?></p><?php endif; ?>
-            </div>
-            <div class="notif-dot <?= (int)$n['is_read']===0 ? 'live' : '' ?>"></div>
-          </a>
-        <?php endforeach; ?>
-      <?php endif; ?>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2 class="titlecase">What changed in this update</h2>
-    <ul class="crm-list">
-      <li>New report submissions notify reviewers automatically.</li>
-      <li>Managers can send approval / needs-changes alerts back to reps.</li>
-      <li>Task attendees now get notified when they are assigned.</li>
-      <li>Notifications can be filtered and marked as read.</li>
-    </ul>
+    <?php endif; ?>
   </div>
 </div>
 
-<!-- Replace ONLY the <script>…</script> block at the bottom of public/dashboard.php with this -->
 <script>
 window.addEventListener('load', async () => {
-  // Toast UI Calendar is loaded (defer) only on this page.
   if (!window.tui || !tui.Calendar) {
     const el = document.getElementById('calendar');
     if (el) el.innerHTML = '<div class="muted" style="padding:14px">Calendar unavailable offline.</div>';
@@ -149,11 +126,9 @@ window.addEventListener('load', async () => {
     const resp = await fetch('api_events.php');
     eventsRaw = await resp.json();
   } catch (e) {
-    // If truly offline and events were never cached, just render an empty calendar.
     eventsRaw = [];
   }
 
-  // Normalize API -> Calendar formats
   const base = (eventsRaw || []).filter(e => e.start);
   const schedulesV1 = base.map((e,i)=>({
     id: String(e.id ?? i),
@@ -187,7 +162,6 @@ window.addEventListener('load', async () => {
     }
   });
 
-  // Support both Toast UI Calendar v1 and v2
   if (typeof cal.createEvents === 'function') {
     cal.createEvents(eventsV2);
     cal.on('clickEvent', (ev)=>{
@@ -214,6 +188,5 @@ window.addEventListener('load', async () => {
   fit();
 });
 </script>
-
 
 <?php include __DIR__.'/footer.php'; ?>
