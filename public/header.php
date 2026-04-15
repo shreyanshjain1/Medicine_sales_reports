@@ -4,8 +4,6 @@ require_login();
 
 // Used for conditional asset loading (important for offline mode)
 $activePage = basename($_SERVER['PHP_SELF'] ?? '');
-$notifUnread = notifications_unread_count();
-$notifRecentMini = notifications_recent((int)(user()['id'] ?? 0), 5);
 ?>
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -59,7 +57,9 @@ $notifRecentMini = notifications_recent((int)(user()['id'] ?? 0), 5);
       <a class="<?= in_array($active,['admin_users.php','user_add.php','user_edit.php'])?'active':'' ?>" href="<?= url('admin_users.php') ?>">Users</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Export</a>
     <?php endif; ?>
-    <a class="<?= $active==='notifications.php'?'active':'' ?>" href="<?= url('notifications.php') ?>">Notifications<?php if ($notifUnread>0): ?> <span class="badge-inline"><?= (int)$notifUnread ?></span><?php endif; ?></a>
+    <?php if (is_manager() || is_district_manager()): ?>
+      <a class="<?= $active==='performance.php'?'active':'' ?>" href="<?= url('performance.php') ?>">Performance</a>
+    <?php endif; ?>
     <a class="<?= $active==='profile.php'?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
     <a href="<?= url('logout.php') ?>" class="danger">Logout</a>
   </nav>
@@ -176,29 +176,12 @@ $notifRecentMini = notifications_recent((int)(user()['id'] ?? 0), 5);
     </form>
 
     <hr>
-    <div class="mini-notifications">
-      <div class="flex between center">
-        <h3 class="titlecase" style="margin:0">Recent Alerts</h3>
-        <a class="btn tiny" href="<?= url('notifications.php') ?>">View all</a>
-      </div>
-      <?php if (!$notifRecentMini): ?>
-        <p class="muted" style="margin:.65rem 0 0">No alerts yet.</p>
-      <?php else: ?>
-        <div class="mini-notification-list">
-          <?php foreach ($notifRecentMini as $mini): ?>
-            <a class="mini-notif <?= (int)$mini['is_read']===0?'unread':'' ?>" href="<?= e($mini['action_url'] ?: url('notifications.php')) ?>">
-              <div class="mini-notif-title"><?= e($mini['title']) ?></div>
-              <div class="mini-notif-time"><?= e(date('M d, h:i A', strtotime((string)$mini['created_at']))) ?></div>
-            </a>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    </div>
-
-    <hr>
     <div class="quick-links">
       <a class="btn block titlecase" href="<?= url('reports.php') ?>">View Reports</a>
       <a class="btn block primary titlecase" href="<?= url('report_add.php') ?>">Add New Report</a>
+      <?php if (is_manager() || is_district_manager()): ?>
+        <a class="btn block titlecase" href="<?= url('performance.php') ?>">Performance KPIs</a>
+      <?php endif; ?>
     </div>
   </div>
 </aside>

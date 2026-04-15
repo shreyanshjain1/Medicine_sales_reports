@@ -35,8 +35,8 @@ function _try_sql(string $sql): void {
 }
 
 function ensure_core_schema(): void {
-  if (!empty($_SESSION['_schema_migrated_v7'])) return;
-  $_SESSION['_schema_migrated_v7'] = 1;
+  if (!empty($_SESSION['_schema_migrated_v6'])) return;
+  $_SESSION['_schema_migrated_v6'] = 1;
 
   // Ensure reports table has required columns
   if (_col_exists('reports','id')) {
@@ -60,27 +60,6 @@ function ensure_core_schema(): void {
     _try_sql("ALTER TABLE reports ADD INDEX idx_reports_status (status)");
   }
 
-  
-  // Notifications table
-  _try_sql("CREATE TABLE IF NOT EXISTS notifications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    title VARCHAR(180) NOT NULL,
-    body TEXT NULL,
-    type VARCHAR(50) NOT NULL DEFAULT 'general',
-    entity_type VARCHAR(50) NULL,
-    entity_id INT NULL,
-    action_url VARCHAR(255) NULL,
-    is_read TINYINT(1) NOT NULL DEFAULT 0,
-    created_by INT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    read_at DATETIME NULL,
-    INDEX idx_notifications_user (user_id),
-    INDEX idx_notifications_read (is_read),
-    INDEX idx_notifications_created (created_at)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-
   // Ensure events table has visit_datetime (used by task->report)
   if (_col_exists('events','id')) {
     if (!_col_exists('events','visit_datetime')) _try_sql("ALTER TABLE events ADD COLUMN visit_datetime DATETIME NULL DEFAULT NULL AFTER hospital_name");
@@ -89,6 +68,111 @@ function ensure_core_schema(): void {
 
 // Run safe schema migration early
 ensure_core_schema();
+
+
+function ensure_performance_schema(): void {
+  if (!empty($_SESSION['_performance_schema_v7'])) return;
+  $_SESSION['_performance_schema_v7'] = 1;
+
+  _try_sql("CREATE TABLE IF NOT EXISTS performance_targets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    target_month CHAR(7) NOT NULL,
+    target_reports INT NOT NULL DEFAULT 0,
+    target_unique_doctors INT NOT NULL DEFAULT 0,
+    target_unique_hospitals INT NOT NULL DEFAULT 0,
+    notes VARCHAR(255) NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_target_user_month (user_id, target_month),
+    KEY idx_target_month (target_month),
+    CONSTRAINT fk_perf_target_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+ensure_performance_schema();
+
+function current_target_month(): string {
+  return date('Y-m');
+}
+
+function performance_scope_filter(string $userColumn='u.id'): string {
+  $me = user();
+  $meId = (int)($me['id'] ?? 0);
+  if ($meId <= 0) return '0';
+  if (is_manager()) return '1';
+  if (is_district_manager()) return "({$userColumn} = {$meId} OR {$userColumn} IN (SELECT id FROM users WHERE district_manager_id = {$meId}))";
+  return "{$userColumn} = {$meId}";
+}
+
+function performance_month_bounds(?string $month=null): array {
+  $month = preg_match('/^\d{4}-\d{2}$/', (string)$month) ? $month : current_target_month();
+  $start = $month . '-01';
+  $end = date('Y-m-d', strtotime($start . ' +1 month'));
+  return [$month, $start, $end];
+}
+
+function fetch_performance_overview(?string $month=null): array {
+  global $mysqli;
+  [$month, $start, $end] = performance_month_bounds($month);
+  $filter = performance_scope_filter('u.id');
+  $sql = "SELECT u.id, u.name, u.role,
+    COALESCE(SUM(CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END),0) AS report_count,
+    COUNT(DISTINCT NULLIF(r.doctor_name,'')) AS doctors_count,
+    COUNT(DISTINCT NULLIF(r.hospital_name,'')) AS hospitals_count,
+    COUNT(DISTINCT NULLIF(r.medicine_name,'')) AS medicines_count,
+    SUM(CASE WHEN r.status='approved' THEN 1 ELSE 0 END) AS approved_count,
+    SUM(CASE WHEN r.status='pending' THEN 1 ELSE 0 END) AS pending_count,
+    SUM(CASE WHEN r.status='needs_changes' THEN 1 ELSE 0 END) AS needs_changes_count,
+    MAX(t.target_reports) AS target_reports,
+    MAX(t.target_unique_doctors) AS target_unique_doctors,
+    MAX(t.target_unique_hospitals) AS target_unique_hospitals
+  FROM users u
+  LEFT JOIN reports r ON r.user_id=u.id AND r.visit_datetime >= ? AND r.visit_datetime < ?
+  LEFT JOIN performance_targets t ON t.user_id=u.id AND t.target_month=?
+  WHERE u.active=1 AND {$filter}
+  GROUP BY u.id, u.name, u.role
+  ORDER BY report_count DESC, u.name ASC";
+  $stmt = $mysqli->prepare($sql);
+  if (!$stmt) return ['month'=>$month,'rows'=>[],'summary'=>[]];
+  $stmt->bind_param('sss',$start,$end,$month);
+  $stmt->execute();
+  $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+  $stmt->close();
+
+  $summary = [
+    'total_reports'=>0,'total_approved'=>0,'total_pending'=>0,'total_needs_changes'=>0,
+    'total_doctors'=>0,'total_hospitals'=>0,'total_medicines'=>0,'target_reports'=>0,
+    'achievement_pct'=>0,
+  ];
+  foreach($rows as $r){
+    $summary['total_reports'] += (int)$r['report_count'];
+    $summary['total_approved'] += (int)$r['approved_count'];
+    $summary['total_pending'] += (int)$r['pending_count'];
+    $summary['total_needs_changes'] += (int)$r['needs_changes_count'];
+    $summary['total_doctors'] += (int)$r['doctors_count'];
+    $summary['total_hospitals'] += (int)$r['hospitals_count'];
+    $summary['total_medicines'] += (int)$r['medicines_count'];
+    $summary['target_reports'] += (int)$r['target_reports'];
+  }
+  if ($summary['target_reports'] > 0) {
+    $summary['achievement_pct'] = (int)round(($summary['total_reports'] / max(1,$summary['target_reports'])) * 100);
+  }
+  return ['month'=>$month,'rows'=>$rows,'summary'=>$summary];
+}
+
+function upsert_performance_target(int $userId, string $month, int $targetReports, int $targetDoctors, int $targetHospitals, string $notes=''): bool {
+  global $mysqli;
+  $createdBy = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare("INSERT INTO performance_targets (user_id, target_month, target_reports, target_unique_doctors, target_unique_hospitals, notes, created_by) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE target_reports=VALUES(target_reports), target_unique_doctors=VALUES(target_unique_doctors), target_unique_hospitals=VALUES(target_unique_hospitals), notes=VALUES(notes), updated_at=CURRENT_TIMESTAMP");
+  if (!$stmt) return false;
+  $stmt->bind_param('isiiisi', $userId, $month, $targetReports, $targetDoctors, $targetHospitals, $notes, $createdBy);
+  $ok = $stmt->execute();
+  $stmt->close();
+  return $ok;
+}
+
 
 function url($path=''){ return rtrim(BASE_URL_EFFECTIVE,'/') . '/' . ltrim($path,'/'); }
 function is_logged_in(){ return isset($_SESSION['user']); }
@@ -246,110 +330,4 @@ function db_safe_insert(string $table, array $data): int {
   $stmt->close();
   return $id;
 }
-
-
-/* ---------------------------
-   Notifications helpers
-   --------------------------- */
-function notifications_unread_count(int $userId = 0): int {
-  global $mysqli;
-  if ($userId <= 0) $userId = (int)(user()['id'] ?? 0);
-  if ($userId <= 0) return 0;
-  $stmt = $mysqli->prepare("SELECT COUNT(*) AS c FROM notifications WHERE user_id=? AND is_read=0");
-  if (!$stmt) return 0;
-  $stmt->bind_param('i', $userId);
-  $stmt->execute();
-  $row = $stmt->get_result()->fetch_assoc();
-  $stmt->close();
-  return (int)($row['c'] ?? 0);
-}
-
-function notifications_recent(int $userId = 0, int $limit = 8): array {
-  global $mysqli;
-  if ($userId <= 0) $userId = (int)(user()['id'] ?? 0);
-  if ($userId <= 0) return [];
-  $limit = max(1, min(50, $limit));
-  $sql = "SELECT id,title,body,type,entity_type,entity_id,action_url,is_read,created_at
-          FROM notifications
-          WHERE user_id=?
-          ORDER BY is_read ASC, created_at DESC
-          LIMIT {$limit}";
-  $stmt = $mysqli->prepare($sql);
-  if (!$stmt) return [];
-  $stmt->bind_param('i', $userId);
-  $stmt->execute();
-  $res = $stmt->get_result();
-  $items = [];
-  while ($row = $res->fetch_assoc()) $items[] = $row;
-  $stmt->close();
-  return $items;
-}
-
-function notify_user(int $userId, string $title, string $body = '', string $type = 'general', ?string $entityType = null, ?int $entityId = null, ?string $actionUrl = null, ?int $createdBy = null): int {
-  global $mysqli;
-  if ($userId <= 0 || trim($title) === '') return 0;
-  $stmt = $mysqli->prepare("INSERT INTO notifications (user_id,title,body,type,entity_type,entity_id,action_url,created_by) VALUES (?,?,?,?,?,?,?,?)");
-  if (!$stmt) return 0;
-  $createdBy = $createdBy ?: (int)(user()['id'] ?? 0) ?: null;
-  $stmt->bind_param('issssisi', $userId, $title, $body, $type, $entityType, $entityId, $actionUrl, $createdBy);
-  $ok = $stmt->execute();
-  $id = $ok ? (int)$stmt->insert_id : 0;
-  $stmt->close();
-  return $id;
-}
-
-function notify_many(array $userIds, string $title, string $body = '', string $type = 'general', ?string $entityType = null, ?int $entityId = null, ?string $actionUrl = null, ?int $createdBy = null): void {
-  $sent = [];
-  foreach ($userIds as $uid) {
-    $uid = (int)$uid;
-    if ($uid <= 0 || isset($sent[$uid])) continue;
-    $sent[$uid] = true;
-    notify_user($uid, $title, $body, $type, $entityType, $entityId, $actionUrl, $createdBy);
-  }
-}
-
-function notification_recipient_ids_for_report_owner(int $ownerUserId): array {
-  global $mysqli;
-  $ids = [];
-  if ($ownerUserId <= 0) return $ids;
-  if ($res = $mysqli->query("SELECT id FROM users WHERE active=1 AND LOWER(role) IN ('manager','admin')")) {
-    while ($row = $res->fetch_assoc()) $ids[] = (int)$row['id'];
-    $res->free();
-  }
-  $stmt = $mysqli->prepare("SELECT district_manager_id FROM users WHERE id=? LIMIT 1");
-  if ($stmt) {
-    $stmt->bind_param('i', $ownerUserId);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    if (!empty($row['district_manager_id'])) $ids[] = (int)$row['district_manager_id'];
-  }
-  return array_values(array_unique(array_filter($ids)));
-}
-
-function mark_notification_read(int $notificationId, int $userId = 0): bool {
-  global $mysqli;
-  if ($userId <= 0) $userId = (int)(user()['id'] ?? 0);
-  if ($notificationId <= 0 || $userId <= 0) return false;
-  $stmt = $mysqli->prepare("UPDATE notifications SET is_read=1, read_at=NOW() WHERE id=? AND user_id=?");
-  if (!$stmt) return false;
-  $stmt->bind_param('ii', $notificationId, $userId);
-  $ok = $stmt->execute();
-  $stmt->close();
-  return (bool)$ok;
-}
-
-function mark_all_notifications_read(int $userId = 0): bool {
-  global $mysqli;
-  if ($userId <= 0) $userId = (int)(user()['id'] ?? 0);
-  if ($userId <= 0) return false;
-  $stmt = $mysqli->prepare("UPDATE notifications SET is_read=1, read_at=NOW() WHERE user_id=? AND is_read=0");
-  if (!$stmt) return false;
-  $stmt->bind_param('i', $userId);
-  $ok = $stmt->execute();
-  $stmt->close();
-  return (bool)$ok;
-}
-
-
 ?>
