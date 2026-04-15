@@ -86,6 +86,27 @@ include __DIR__.'/header.php';
   ], static fn($v) => $v !== null && $v !== ''))) ?>">Open in Reports</a>
 </div>
 
+<div class="card quick-action-bar">
+  <div>
+    <h3>Manager-ready outputs</h3>
+    <div class="subtle">Turn the same filtered dataset into a printable summary or copy-ready digest.</div>
+  </div>
+  <div class="actions-inline">
+    <a class="btn" href="manager_summary.php?<?= e(http_build_query(array_filter([
+      'employee_id' => $employee_id ?: null,
+      'date_from' => $date_from ?: null,
+      'date_to' => $date_to ?: null,
+      'status' => $status !== 'all' ? $status : null,
+    ], static fn($v) => $v !== null && $v !== ''))) ?>">Open Manager Summary</a>
+    <a class="btn primary" href="digest_builder.php?<?= e(http_build_query(array_filter([
+      'employee_id' => $employee_id ?: null,
+      'date_from' => $date_from ?: null,
+      'date_to' => $date_to ?: null,
+      'status' => $status !== 'all' ? $status : null,
+    ], static fn($v) => $v !== null && $v !== ''))) ?>">Open Digest Builder</a>
+  </div>
+</div>
+
 <div class="kpi-strip compact-gap">
   <div class="metric"><div class="label">Rows</div><div class="value"><?= (int)($stats['total_rows'] ?? 0) ?></div><div class="hint">Current export size</div></div>
   <div class="metric"><div class="label">Reps</div><div class="value"><?= (int)($stats['reps_count'] ?? 0) ?></div><div class="hint">Unique employees</div></div>

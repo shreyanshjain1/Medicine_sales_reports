@@ -45,8 +45,8 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
 </head>
 <body class="light">
 
-<?php $active = basename($_SERVER['PHP_SELF']); $unreadCount = unread_notification_count(); ?>
 <header class="topbar glass">
+  <?php $active = basename($_SERVER['PHP_SELF']); ?>
   <div class="brand titlecase"><?= e(COMPANY_NAME) ?> · Reporting</div>
   <nav class="nav titlecase">
     <a class="<?= $active==='dashboard.php'?'active':'' ?>" href="<?= url('dashboard.php') ?>">Dashboard</a>
@@ -56,15 +56,12 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="<?= $active==='admin_tasks.php'?'active':'' ?>" href="<?= url('admin_tasks.php') ?>">Tasks</a>
       <a class="<?= in_array($active,['admin_users.php','user_add.php','user_edit.php'])?'active':'' ?>" href="<?= url('admin_users.php') ?>">Users</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('exports.php') ?>">Export</a>
-    <?php endif; ?>
-    <?php if (is_manager() || is_district_manager()): ?>
-      <a class="<?= $active==='approvals.php'?'active':'' ?>" href="<?= url('approvals.php') ?>">Approvals</a>
-      <a class="<?= $active==='activity_logs.php'?'active':'' ?>" href="<?= url('activity_logs.php') ?>">Activity</a>
+      <a class="<?= $active==='manager_summary.php'?'active':'' ?>" href="<?= url('manager_summary.php') ?>">Summary</a>
+      <a class="<?= $active==='digest_builder.php'?'active':'' ?>" href="<?= url('digest_builder.php') ?>">Digest</a>
     <?php endif; ?>
     <?php if (is_manager() || is_district_manager()): ?>
       <a class="<?= $active==='performance.php'?'active':'' ?>" href="<?= url('performance.php') ?>">Performance</a>
     <?php endif; ?>
-    <a class="<?= $active==='notifications.php'?'active':'' ?>" href="<?= url('notifications.php') ?>">Notifications<?php if($unreadCount>0): ?> <span class="nav-badge"><?= (int)$unreadCount ?></span><?php endif; ?></a>
     <a class="<?= $active==='profile.php'?'active':'' ?>" href="<?= url('profile.php') ?>">Profile</a>
     <a href="<?= url('logout.php') ?>" class="danger">Logout</a>
   </nav>
@@ -186,6 +183,9 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <a class="btn block primary titlecase" href="<?= url('report_add.php') ?>">Add New Report</a>
       <?php if (is_manager() || is_district_manager()): ?>
         <a class="btn block titlecase" href="<?= url('performance.php') ?>">Performance KPIs</a>
+      <?php endif; ?>
+      <?php if (is_manager()): ?>
+        <a class="btn block titlecase" href="<?= url('manager_summary.php') ?>">Manager Summary</a>
       <?php endif; ?>
     </div>
   </div>
