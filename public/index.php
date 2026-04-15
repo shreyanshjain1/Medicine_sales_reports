@@ -15,13 +15,13 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $mins=max(1,(int)ceil($retryAfter/60));
     $error='Too many failed login attempts. Try again in about '.$mins.' minute(s).';
   } else {
-    $stmt=$mysqli->prepare('SELECT id,name,email,password_hash,role,active FROM users WHERE email=? LIMIT 1');
+    $stmt=$mysqli->prepare('SELECT id,name,email,password_hash,role,active,wants_email_notifications FROM users WHERE email=? LIMIT 1');
     $stmt->bind_param('s',$email);
     $stmt->execute();
     $res=$stmt->get_result();
     if($u=$res->fetch_assoc()){
       if((int)$u['active'] === 1 && password_verify($pass,$u['password_hash'])){
-        $_SESSION['user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role'=>role_norm($u['role'])];
+        $_SESSION['user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role'=>role_norm($u['role']),'wants_email_notifications'=>(int)($u['wants_email_notifications'] ?? 1)];
         record_login_attempt($email, true);
         log_audit('login_success', 'user', (int)$u['id'], 'Successful sign in');
         header('Location: '.url('dashboard.php')); exit;

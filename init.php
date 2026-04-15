@@ -332,11 +332,30 @@ function db_safe_insert(string $table, array $data): int {
 }
 
 /* ---------------------------
-   Workflow / review helpers
+   Workflow, security, mail helpers
    --------------------------- */
+function app_env(): string { return defined('APP_ENV') ? strtolower((string)APP_ENV) : 'production'; }
+function normalize_email(string $email): string { return strtolower(trim($email)); }
+function client_ip(): string {
+  foreach (['HTTP_CF_CONNECTING_IP','HTTP_X_FORWARDED_FOR','REMOTE_ADDR'] as $k) {
+    if (!empty($_SERVER[$k])) return trim(explode(',', (string)$_SERVER[$k])[0]);
+  }
+  return '0.0.0.0';
+}
+function password_meets_policy(string $password, array &$errors=[]): bool {
+  $errors = [];
+  if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
+  if (!preg_match('/[A-Z]/', $password)) $errors[] = 'Add at least one uppercase letter.';
+  if (!preg_match('/[a-z]/', $password)) $errors[] = 'Add at least one lowercase letter.';
+  if (!preg_match('/\d/', $password)) $errors[] = 'Add at least one number.';
+  return !$errors;
+}
+function allow_setup_mode(): bool { return defined('ALLOW_SETUP') && ALLOW_SETUP; }
+function allow_dev_tools(): bool { return defined('ALLOW_DEV_TOOLS') && ALLOW_DEV_TOOLS; }
+
 function ensure_workflow_schema(): void {
-  if (!empty($_SESSION['_workflow_schema_v9'])) return;
-  $_SESSION['_workflow_schema_v9'] = 1;
+  if (!empty($_SESSION['_workflow_schema_v10'])) return;
+  $_SESSION['_workflow_schema_v10'] = 1;
 
   _try_sql("CREATE TABLE IF NOT EXISTS report_status_history (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -347,7 +366,7 @@ function ensure_workflow_schema(): void {
     comment TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_rsh_report (report_id),
-    INDEX idx_rsh_created (created_at)
+    INDEX idx_rsh_actor (actor_user_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
   _try_sql("CREATE TABLE IF NOT EXISTS audit_logs (
@@ -359,6 +378,7 @@ function ensure_workflow_schema(): void {
     details TEXT NULL,
     ip_address VARCHAR(64) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_user (user_id),
     INDEX idx_audit_entity (entity_type, entity_id),
     INDEX idx_audit_created (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -366,208 +386,434 @@ function ensure_workflow_schema(): void {
   _try_sql("CREATE TABLE IF NOT EXISTS notifications (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    title VARCHAR(180) NOT NULL,
+    title VARCHAR(200) NOT NULL,
     body TEXT NULL,
-    type VARCHAR(80) NULL,
+    type VARCHAR(80) NOT NULL DEFAULT 'general',
     entity_type VARCHAR(80) NULL,
     entity_id INT NULL,
     action_url VARCHAR(255) NULL,
+    actor_user_id INT NULL,
     is_read TINYINT(1) NOT NULL DEFAULT 0,
-    created_by INT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_notifications_user (user_id),
     INDEX idx_notifications_read (is_read),
     INDEX idx_notifications_created (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  _try_sql("CREATE TABLE IF NOT EXISTS login_attempts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(190) NOT NULL,
+    ip_address VARCHAR(64) NOT NULL,
+    was_successful TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_login_email_created (email, created_at),
+    INDEX idx_login_ip_created (ip_address, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  _try_sql("CREATE TABLE IF NOT EXISTS password_resets (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    selector CHAR(16) NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_selector (selector),
+    INDEX idx_reset_user (user_id),
+    INDEX idx_reset_expiry (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  _try_sql("CREATE TABLE IF NOT EXISTS app_mail_log (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    recipient_email VARCHAR(190) NOT NULL,
+    subject_line VARCHAR(255) NOT NULL,
+    mail_driver VARCHAR(20) NOT NULL DEFAULT 'log',
+    status VARCHAR(20) NOT NULL DEFAULT 'queued',
+    error_message TEXT NULL,
+    related_entity_type VARCHAR(80) NULL,
+    related_entity_id INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_mail_recipient (recipient_email),
+    INDEX idx_mail_created (created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  if (_col_exists('users','id') && !_col_exists('users','wants_email_notifications')) {
+    _try_sql("ALTER TABLE users ADD COLUMN wants_email_notifications TINYINT(1) NOT NULL DEFAULT 1 AFTER active");
+  }
 }
 ensure_workflow_schema();
 
-function request_ip_address(): string {
-  return substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64);
+function log_audit(string $action, ?string $entityType=null, ?int $entityId=null, string $details=''): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $ip = client_ip();
+  $stmt = $mysqli->prepare("INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address) VALUES (?,?,?,?,?,?)");
+  if (!$stmt) return;
+  $u = $uid > 0 ? $uid : null;
+  $eid = ($entityId ?? 0) > 0 ? (int)$entityId : null;
+  $stmt->bind_param('ississ', $u, $action, $entityType, $eid, $details, $ip);
+  @$stmt->execute();
+  $stmt->close();
 }
 
-if (!function_exists('log_audit')) {
-  function log_audit(string $action, ?string $entityType=null, ?int $entityId=null, $details=null, ?int $userId=null): bool {
-    global $mysqli;
-    if (!db_column_exists('audit_logs', 'action')) return false;
-    $uid = $userId ?? (int)(user()['id'] ?? 0);
-    $detailsText = is_string($details) ? $details : json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    $stmt = $mysqli->prepare("INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address) VALUES (?,?,?,?,?,?)");
-    if (!$stmt) return false;
-    $ip = request_ip_address();
-    $stmt->bind_param('ississ', $uid, $action, $entityType, $entityId, $detailsText, $ip);
-    $ok = $stmt->execute();
-    $stmt->close();
-    return $ok;
-  }
+function record_report_status(int $reportId, string $newStatus, ?string $oldStatus=null, string $comment=''): void {
+  global $mysqli;
+  if ($reportId <= 0 || $newStatus === '') return;
+  $actorId = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare("INSERT INTO report_status_history (report_id, actor_user_id, old_status, new_status, comment) VALUES (?,?,?,?,?)");
+  if (!$stmt) return;
+  $actor = $actorId > 0 ? $actorId : null;
+  $stmt->bind_param('iisss', $reportId, $actor, $oldStatus, $newStatus, $comment);
+  @$stmt->execute();
+  $stmt->close();
 }
 
-if (!function_exists('record_report_status')) {
-  function record_report_status(int $reportId, ?string $oldStatus, string $newStatus, string $comment='', ?int $actorUserId=null): bool {
-    global $mysqli;
-    if (!db_column_exists('report_status_history', 'report_id')) return false;
-    $uid = $actorUserId ?? (int)(user()['id'] ?? 0);
-    $stmt = $mysqli->prepare("INSERT INTO report_status_history (report_id, actor_user_id, old_status, new_status, comment) VALUES (?,?,?,?,?)");
-    if (!$stmt) return false;
-    $stmt->bind_param('iisss', $reportId, $uid, $oldStatus, $newStatus, $comment);
-    $ok = $stmt->execute();
-    $stmt->close();
-    return $ok;
-  }
-}
-
-if (!function_exists('notify_user')) {
-  function notify_user(int $userId, string $title, string $body='', ?string $type=null, ?string $entityType=null, ?int $entityId=null, ?string $actionUrl=null, ?int $createdBy=null): bool {
-    global $mysqli;
-    if ($userId <= 0 || !db_column_exists('notifications', 'user_id')) return false;
-    $by = $createdBy ?? (int)(user()['id'] ?? 0);
-    $stmt = $mysqli->prepare("INSERT INTO notifications (user_id, title, body, type, entity_type, entity_id, action_url, created_by) VALUES (?,?,?,?,?,?,?,?)");
-    if (!$stmt) return false;
-    $stmt->bind_param('issssisi', $userId, $title, $body, $type, $entityType, $entityId, $actionUrl, $by);
-    $ok = $stmt->execute();
-    $stmt->close();
-    return $ok;
-  }
-}
-
-if (!function_exists('notifications_unread_count')) {
-  function notifications_unread_count(?int $userId=null): int {
-    global $mysqli;
-    $uid = $userId ?? (int)(user()['id'] ?? 0);
-    if ($uid <= 0 || !db_column_exists('notifications', 'user_id')) return 0;
-    $stmt = $mysqli->prepare("SELECT COUNT(*) c FROM notifications WHERE user_id=? AND is_read=0");
-    if (!$stmt) return 0;
-    $stmt->bind_param('i', $uid);
+function fetch_report_timeline(int $reportId): array {
+  global $mysqli;
+  $items = [];
+  if ($reportId <= 0) return $items;
+  if ($stmt = $mysqli->prepare("SELECT 'status' AS source, created_at, new_status AS label, comment AS details FROM report_status_history WHERE report_id=?")) {
+    $stmt->bind_param('i', $reportId);
     $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) $items[] = $row;
     $stmt->close();
-    return (int)($row['c'] ?? 0);
   }
+  if ($stmt = $mysqli->prepare("SELECT 'audit' AS source, created_at, action AS label, details FROM audit_logs WHERE entity_type='report' AND entity_id=?")) {
+    $stmt->bind_param('i', $reportId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) $items[] = $row;
+    $stmt->close();
+  }
+  usort($items, static fn($a,$b) => strcmp((string)$b['created_at'], (string)$a['created_at']));
+  return $items;
 }
 
-if (!function_exists('mark_notification_read')) {
-  function mark_notification_read(int $notificationId, ?int $userId=null): bool {
-    global $mysqli;
-    $uid = $userId ?? (int)(user()['id'] ?? 0);
-    $stmt = $mysqli->prepare("UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?");
-    if (!$stmt) return false;
-    $stmt->bind_param('ii', $notificationId, $uid);
-    $ok = $stmt->execute();
-    $stmt->close();
+function fetch_queue_summary(): array {
+  global $mysqli;
+  $where = reports_scope_where('r');
+  $sql = "SELECT SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) pending_count,
+                 SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END) approved_count,
+                 SUM(CASE WHEN status='needs_changes' THEN 1 ELSE 0 END) needs_changes_count
+          FROM reports r WHERE {$where}";
+  $row = $mysqli->query($sql)?->fetch_assoc() ?: [];
+  return [
+    'pending_count' => (int)($row['pending_count'] ?? 0),
+    'approved_count' => (int)($row['approved_count'] ?? 0),
+    'needs_changes_count' => (int)($row['needs_changes_count'] ?? 0),
+  ];
+}
+
+function wants_email_notifications(int $userId): bool {
+  global $mysqli;
+  if ($userId <= 0) return false;
+  if (!db_column_exists('users', 'wants_email_notifications')) return true;
+  $stmt = $mysqli->prepare('SELECT wants_email_notifications FROM users WHERE id=? LIMIT 1');
+  if (!$stmt) return true;
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  return !isset($row['wants_email_notifications']) || (int)$row['wants_email_notifications'] === 1;
+}
+
+function get_user_brief(int $userId): ?array {
+  global $mysqli;
+  $stmt = $mysqli->prepare('SELECT id,name,email,active FROM users WHERE id=? LIMIT 1');
+  if (!$stmt) return null;
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  return $row ?: null;
+}
+
+function mail_driver(): string { return defined('MAIL_DRIVER') ? strtolower((string)MAIL_DRIVER) : 'log'; }
+function mail_enabled(): bool { return defined('MAIL_ENABLED') ? (bool)MAIL_ENABLED : false; }
+function mail_from_email(): string { return defined('MAIL_FROM_EMAIL') ? (string)MAIL_FROM_EMAIL : 'no-reply@example.com'; }
+function mail_from_name(): string { return defined('MAIL_FROM_NAME') ? (string)MAIL_FROM_NAME : APP_NAME; }
+function mail_reply_to(): string { return defined('MAIL_REPLY_TO') ? (string)MAIL_REPLY_TO : mail_from_email(); }
+
+function log_mail_attempt(string $recipient, string $subject, string $driver, string $status, string $error='', ?string $entityType=null, ?int $entityId=null): void {
+  global $mysqli;
+  $stmt = $mysqli->prepare("INSERT INTO app_mail_log (recipient_email, subject_line, mail_driver, status, error_message, related_entity_type, related_entity_id) VALUES (?,?,?,?,?,?,?)");
+  if (!$stmt) return;
+  $stmt->bind_param('ssssssi', $recipient, $subject, $driver, $status, $error, $entityType, $entityId);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function app_mail_headers(): string {
+  $headers = [];
+  $headers[] = 'MIME-Version: 1.0';
+  $headers[] = 'Content-type: text/html; charset=UTF-8';
+  $headers[] = 'From: ' . mail_from_name() . ' <' . mail_from_email() . '>';
+  $headers[] = 'Reply-To: ' . mail_reply_to();
+  return implode("\r\n", $headers);
+}
+
+function smtp_expect($fp, array $codes): bool {
+  $line = '';
+  while (!feof($fp)) {
+    $chunk = fgets($fp, 515);
+    if ($chunk === false) break;
+    $line = $chunk;
+    if (strlen($chunk) >= 4 && $chunk[3] === ' ') break;
+  }
+  $code = (int)substr($line, 0, 3);
+  return in_array($code, $codes, true);
+}
+
+function smtp_send_mail(string $to, string $subject, string $html, string $text=''): array {
+  $host = defined('SMTP_HOST') ? (string)SMTP_HOST : '';
+  $port = defined('SMTP_PORT') ? (int)SMTP_PORT : 25;
+  $secure = defined('SMTP_SECURE') ? strtolower((string)SMTP_SECURE) : '';
+  $username = defined('SMTP_USERNAME') ? (string)SMTP_USERNAME : '';
+  $password = defined('SMTP_PASSWORD') ? (string)SMTP_PASSWORD : '';
+  $timeout = defined('SMTP_TIMEOUT') ? (int)SMTP_TIMEOUT : 15;
+  if ($host === '') return [false, 'SMTP host is not configured'];
+
+  $remote = ($secure === 'ssl' ? 'ssl://' : '') . $host;
+  $fp = @fsockopen($remote, $port, $errno, $errstr, $timeout);
+  if (!$fp) return [false, $errstr ?: ('SMTP connect failed: ' . $errno)];
+  stream_set_timeout($fp, $timeout);
+  if (!smtp_expect($fp, [220])) { fclose($fp); return [false, 'SMTP greeting failed']; }
+
+  fwrite($fp, "EHLO " . preg_replace('/^https?:\/\//','', parse_url(BASE_URL_EFFECTIVE, PHP_URL_HOST) ?: 'localhost') . "\r\n");
+  if (!smtp_expect($fp, [250])) { fclose($fp); return [false, 'SMTP EHLO failed']; }
+
+  if ($secure === 'tls') {
+    fwrite($fp, "STARTTLS\r\n");
+    if (!smtp_expect($fp, [220])) { fclose($fp); return [false, 'SMTP STARTTLS failed']; }
+    if (!@stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { fclose($fp); return [false, 'SMTP TLS negotiation failed']; }
+    fwrite($fp, "EHLO localhost\r\n");
+    if (!smtp_expect($fp, [250])) { fclose($fp); return [false, 'SMTP EHLO after TLS failed']; }
+  }
+
+  if ($username !== '') {
+    fwrite($fp, "AUTH LOGIN\r\n");
+    if (!smtp_expect($fp, [334])) { fclose($fp); return [false, 'SMTP AUTH LOGIN failed']; }
+    fwrite($fp, base64_encode($username) . "\r\n");
+    if (!smtp_expect($fp, [334])) { fclose($fp); return [false, 'SMTP username rejected']; }
+    fwrite($fp, base64_encode($password) . "\r\n");
+    if (!smtp_expect($fp, [235])) { fclose($fp); return [false, 'SMTP password rejected']; }
+  }
+
+  $boundary = 'b_' . bin2hex(random_bytes(8));
+  $from = mail_from_email();
+  $plain = $text !== '' ? $text : trim(strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $html)));
+  $data = "From: " . mail_from_name() . " <{$from}>\r\n";
+  $data .= "To: <{$to}>\r\n";
+  $data .= "Subject: {$subject}\r\n";
+  $data .= "MIME-Version: 1.0\r\n";
+  $data .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n\r\n";
+  $data .= "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n{$plain}\r\n";
+  $data .= "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{$html}\r\n";
+  $data .= "--{$boundary}--\r\n";
+
+  fwrite($fp, "MAIL FROM:<{$from}>\r\n");
+  if (!smtp_expect($fp, [250])) { fclose($fp); return [false, 'SMTP MAIL FROM failed']; }
+  fwrite($fp, "RCPT TO:<{$to}>\r\n");
+  if (!smtp_expect($fp, [250, 251])) { fclose($fp); return [false, 'SMTP RCPT TO failed']; }
+  fwrite($fp, "DATA\r\n");
+  if (!smtp_expect($fp, [354])) { fclose($fp); return [false, 'SMTP DATA failed']; }
+  fwrite($fp, $data . "\r\n.\r\n");
+  if (!smtp_expect($fp, [250])) { fclose($fp); return [false, 'SMTP message rejected']; }
+  fwrite($fp, "QUIT\r\n");
+  fclose($fp);
+  return [true, 'sent'];
+}
+
+function send_app_mail(string $to, string $subject, string $html, string $text='', ?string $entityType=null, ?int $entityId=null): bool {
+  $driver = mail_driver();
+  if (!$to) return false;
+  if (!mail_enabled() && $driver !== 'log') {
+    log_mail_attempt($to, $subject, $driver, 'skipped', 'Mail delivery is disabled', $entityType, $entityId);
+    return false;
+  }
+  if ($driver === 'log') {
+    log_mail_attempt($to, $subject, $driver, 'logged', '', $entityType, $entityId);
+    return true;
+  }
+  if ($driver === 'mail') {
+    $ok = @mail($to, $subject, $html, app_mail_headers());
+    log_mail_attempt($to, $subject, $driver, $ok ? 'sent' : 'failed', $ok ? '' : 'PHP mail() returned false', $entityType, $entityId);
     return $ok;
   }
-}
-
-if (!function_exists('mark_all_notifications_read')) {
-  function mark_all_notifications_read(?int $userId=null): bool {
-    global $mysqli;
-    $uid = $userId ?? (int)(user()['id'] ?? 0);
-    $stmt = $mysqli->prepare("UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0");
-    if (!$stmt) return false;
-    $stmt->bind_param('i', $uid);
-    $ok = $stmt->execute();
-    $stmt->close();
+  if ($driver === 'smtp') {
+    [$ok, $err] = smtp_send_mail($to, $subject, $html, $text);
+    log_mail_attempt($to, $subject, $driver, $ok ? 'sent' : 'failed', $err, $entityType, $entityId);
     return $ok;
   }
+  log_mail_attempt($to, $subject, $driver, 'failed', 'Unknown mail driver', $entityType, $entityId);
+  return false;
 }
 
-if (!function_exists('get_report_timeline')) {
-  function get_report_timeline(int $reportId, int $limit=50): array {
-    global $mysqli;
-    $reportId = max(0, $reportId);
-    if ($reportId <= 0) return [];
-    $limit = max(1, min(200, $limit));
-    $items = [];
+function notification_email_subject(string $title): string { return APP_NAME . ' · ' . $title; }
+function notification_email_html(string $title, string $body, ?string $actionUrl=null): string {
+  $html = '<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">';
+  $html .= '<h2 style="margin:0 0 12px">' . e($title) . '</h2>';
+  $html .= '<p style="margin:0 0 12px">' . nl2br(e($body)) . '</p>';
+  if ($actionUrl) $html .= '<p style="margin:16px 0"><a href="' . e($actionUrl) . '" style="display:inline-block;padding:10px 14px;background:#0f766e;color:#fff;text-decoration:none;border-radius:8px">Open in app</a></p>';
+  $html .= '<p style="margin-top:20px;color:#666;font-size:12px">This is an automated message from ' . e(APP_NAME) . '.</p></div>';
+  return $html;
+}
 
-    if (db_column_exists('report_status_history', 'report_id')) {
-      $stmt = $mysqli->prepare("SELECT h.id, h.old_status, h.new_status, h.comment, h.created_at, u.name AS actor_name
-        FROM report_status_history h
-        LEFT JOIN users u ON u.id = h.actor_user_id
-        WHERE h.report_id=?
-        ORDER BY h.created_at DESC, h.id DESC
-        LIMIT {$limit}");
-      if ($stmt) {
-        $stmt->bind_param('i', $reportId);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        while ($row = $res->fetch_assoc()) {
-          $items[] = [
-            'kind' => 'status',
-            'icon' => 'status',
-            'title' => 'Status changed to ' . ucfirst(str_replace('_', ' ', (string)$row['new_status'])),
-            'actor' => (string)($row['actor_name'] ?: 'System'),
-            'meta' => (($row['old_status'] ?? '') ? ('From ' . ucfirst(str_replace('_', ' ', (string)$row['old_status'])) . ' → ') : '') . ucfirst(str_replace('_', ' ', (string)$row['new_status'])),
-            'comment' => (string)($row['comment'] ?? ''),
-            'created_at' => (string)$row['created_at'],
-          ];
-        }
-        $stmt->close();
-      }
-    }
-
-    if (db_column_exists('audit_logs', 'action')) {
-      $stmt = $mysqli->prepare("SELECT a.id, a.action, a.details, a.created_at, u.name AS actor_name
-        FROM audit_logs a
-        LEFT JOIN users u ON u.id = a.user_id
-        WHERE a.entity_type='report' AND a.entity_id=?
-        ORDER BY a.created_at DESC, a.id DESC
-        LIMIT {$limit}");
-      if ($stmt) {
-        $stmt->bind_param('i', $reportId);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        while ($row = $res->fetch_assoc()) {
-          $title = ucwords(str_replace(['_', '-'], ' ', (string)$row['action']));
-          $items[] = [
-            'kind' => 'audit',
-            'icon' => 'audit',
-            'title' => $title,
-            'actor' => (string)($row['actor_name'] ?: 'System'),
-            'meta' => 'Audit activity',
-            'comment' => (string)($row['details'] ?? ''),
-            'created_at' => (string)$row['created_at'],
-          ];
-        }
-        $stmt->close();
-      }
-    }
-
-    usort($items, function($a, $b) {
-      return strcmp((string)$b['created_at'], (string)$a['created_at']);
-    });
-    return array_slice($items, 0, $limit);
+function notify_user(int $userId, string $title, string $body='', string $type='general', ?string $entityType=null, ?int $entityId=null, ?string $actionUrl=null, ?int $actorUserId=null): bool {
+  global $mysqli;
+  if ($userId <= 0) return false;
+  $stmt = $mysqli->prepare("INSERT INTO notifications (user_id,title,body,type,entity_type,entity_id,action_url,actor_user_id,is_read) VALUES (?,?,?,?,?,?,?,?,0)");
+  if ($stmt) {
+    $stmt->bind_param('issssisi', $userId, $title, $body, $type, $entityType, $entityId, $actionUrl, $actorUserId);
+    @$stmt->execute();
+    $stmt->close();
   }
-}
-
-if (!function_exists('report_review_summary')) {
-  function report_review_summary(?int $reportId=null): array {
-    global $mysqli;
-    $summary = [
-      'pending' => 0,
-      'approved' => 0,
-      'needs_changes' => 0,
-      'overdue_pending' => 0,
-    ];
-    $where = " WHERE " . reports_scope_where('r');
-    if ($reportId !== null) {
-      $rid = (int)$reportId;
-      $where .= " AND r.id = {$rid}";
-    }
-    $sql = "SELECT
-      SUM(CASE WHEN COALESCE(NULLIF(r.status,''),'pending')='pending' THEN 1 ELSE 0 END) AS pending_count,
-      SUM(CASE WHEN COALESCE(NULLIF(r.status,''),'pending')='approved' THEN 1 ELSE 0 END) AS approved_count,
-      SUM(CASE WHEN COALESCE(NULLIF(r.status,''),'pending')='needs_changes' THEN 1 ELSE 0 END) AS needs_changes_count,
-      SUM(CASE WHEN COALESCE(NULLIF(r.status,''),'pending')='pending' AND DATE(COALESCE(r.visit_datetime, r.created_at)) <= DATE_SUB(CURDATE(), INTERVAL 3 DAY) THEN 1 ELSE 0 END) AS overdue_pending_count
-      FROM reports r {$where}";
-    $row = $mysqli->query($sql);
-    if ($row) {
-      $data = $row->fetch_assoc() ?: [];
-      $summary['pending'] = (int)($data['pending_count'] ?? 0);
-      $summary['approved'] = (int)($data['approved_count'] ?? 0);
-      $summary['needs_changes'] = (int)($data['needs_changes_count'] ?? 0);
-      $summary['overdue_pending'] = (int)($data['overdue_pending_count'] ?? 0);
-    }
-    return $summary;
+  $user = get_user_brief($userId);
+  if ($user && (int)($user['active'] ?? 0) === 1 && !empty($user['email']) && wants_email_notifications($userId)) {
+    send_app_mail((string)$user['email'], notification_email_subject($title), notification_email_html($title, $body, $actionUrl), $body, $entityType, $entityId);
   }
+  return true;
 }
 
+function unread_notification_count(int $userId=0): int {
+  global $mysqli;
+  $userId = $userId > 0 ? $userId : (int)(user()['id'] ?? 0);
+  if ($userId <= 0) return 0;
+  $stmt = $mysqli->prepare('SELECT COUNT(*) c FROM notifications WHERE user_id=? AND is_read=0');
+  if (!$stmt) return 0;
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  return (int)($row['c'] ?? 0);
+}
+function mark_notification_read(int $id): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare('UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?');
+  if (!$stmt) return;
+  $stmt->bind_param('ii', $id, $uid);
+  @$stmt->execute();
+  $stmt->close();
+}
+function mark_all_notifications_read(): void {
+  global $mysqli;
+  $uid = (int)(user()['id'] ?? 0);
+  $stmt = $mysqli->prepare('UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0');
+  if (!$stmt) return;
+  $stmt->bind_param('i', $uid);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function create_password_reset_token(int $userId, int $minutes=60): array {
+  global $mysqli;
+  $selector = bin2hex(random_bytes(8));
+  $validator = bin2hex(random_bytes(32));
+  $hash = hash('sha256', $validator);
+  $expires = date('Y-m-d H:i:s', time() + max(5, $minutes) * 60);
+  if ($stmt = $mysqli->prepare('INSERT INTO password_resets (user_id, selector, token_hash, expires_at) VALUES (?,?,?,?)')) {
+    $stmt->bind_param('isss', $userId, $selector, $hash, $expires);
+    @$stmt->execute();
+    $stmt->close();
+  }
+  return ['selector'=>$selector, 'validator'=>$validator, 'expires_at'=>$expires];
+}
+function consume_password_reset_token(string $selector, string $validator): ?array {
+  global $mysqli;
+  $hash = hash('sha256', $validator);
+  $stmt = $mysqli->prepare('SELECT id,user_id,selector,expires_at,used_at FROM password_resets WHERE selector=? AND token_hash=? LIMIT 1');
+  if (!$stmt) return null;
+  $stmt->bind_param('ss', $selector, $hash);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  if (!$row) return null;
+  if (!empty($row['used_at'])) return null;
+  if (strtotime((string)$row['expires_at']) < time()) return null;
+  return $row;
+}
+function mark_password_reset_used(int $id): void {
+  global $mysqli;
+  $stmt = $mysqli->prepare('UPDATE password_resets SET used_at=NOW() WHERE id=?');
+  if (!$stmt) return;
+  $stmt->bind_param('i', $id);
+  @$stmt->execute();
+  $stmt->close();
+}
+
+function record_login_attempt(string $email, bool $wasSuccessful): void {
+  global $mysqli;
+  $ip = client_ip();
+  $flag = $wasSuccessful ? 1 : 0;
+  $stmt = $mysqli->prepare('INSERT INTO login_attempts (email, ip_address, was_successful) VALUES (?,?,?)');
+  if (!$stmt) return;
+  $stmt->bind_param('ssi', $email, $ip, $flag);
+  @$stmt->execute();
+  $stmt->close();
+}
+function login_is_locked(string $email, int &$retryAfter=0, int $limit=5, int $windowMinutes=15): bool {
+  global $mysqli;
+  $ip = client_ip();
+  $stmt = $mysqli->prepare('SELECT COUNT(*) c, MIN(created_at) first_at FROM login_attempts WHERE was_successful=0 AND created_at >= (NOW() - INTERVAL ? MINUTE) AND (email=? OR ip_address=?)');
+  if (!$stmt) return false;
+  $stmt->bind_param('iss', $windowMinutes, $email, $ip);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+  $count = (int)($row['c'] ?? 0);
+  if ($count < $limit) return false;
+  $firstAt = strtotime((string)($row['first_at'] ?? 'now'));
+  $retryAfter = max(0, ($firstAt + ($windowMinutes * 60)) - time());
+  return true;
+}
+
+function fetch_doctor_master_records(): array {
+  global $mysqli;
+  $rows = [];
+  $hasDoctorsMaster = db_column_exists('doctors_master', 'doctor_name');
+  if ($hasDoctorsMaster) {
+    $sql = "SELECT id, doctor_name, email, hospital_name, city FROM doctors_master WHERE active=1 ORDER BY doctor_name ASC LIMIT 1000";
+  } else {
+    $sql = "SELECT id, dr_name AS doctor_name, email, hospital_address AS hospital_name, place AS city FROM doctors_masterlist ORDER BY dr_name ASC LIMIT 1000";
+  }
+  if ($res = $mysqli->query($sql)) {
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
+  }
+  return $rows;
+}
+function fetch_master_options(string $table): array {
+  global $mysqli;
+  $rows = [];
+  $labelCol = $table === 'medicines_master' ? 'name' : 'name';
+  if ($res = $mysqli->query("SELECT id, {$labelCol} AS label FROM {$table} WHERE active=1 ORDER BY {$labelCol} ASC LIMIT 1000")) {
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
+  }
+  return $rows;
+}
+
+function normalize_upload_path(?string $path): ?string {
+  $path = trim((string)$path);
+  if ($path === '') return null;
+  return str_replace('\\', '/', $path);
+}
+function save_uploaded_attachment(array $file, int $userId, array &$errors=[]): ?string {
+  if (empty($file['name']) || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) return null;
+  $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+  $allowed = ['pdf','jpg','jpeg','png'];
+  if (!in_array($ext, $allowed, true)) {
+    $errors[] = 'Invalid attachment type. Allowed: PDF/JPG/PNG.';
+    return null;
+  }
+  if (!is_dir(ATTACH_DIR)) @mkdir(ATTACH_DIR, 0775, true);
+  $fname = 'att_' . $userId . '_' . time() . '_' . substr(bin2hex(random_bytes(4)),0,8) . '.' . $ext;
+  $dest = rtrim(ATTACH_DIR, '/\\') . DIRECTORY_SEPARATOR . $fname;
+  if (!@move_uploaded_file($file['tmp_name'], $dest)) {
+    $errors[] = 'Failed to upload attachment.';
+    return null;
+  }
+  return 'uploads/attachments/' . $fname;
+}
+
+?>
