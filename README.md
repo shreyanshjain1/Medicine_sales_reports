@@ -116,3 +116,26 @@ This repo now includes a cleaner database structure:
 
 ## Why this version is stronger
 This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, cleaner repo structure, consolidated database source-of-truth, and better separation between app files, uploads, and runtime logs.
+
+
+## Project Structure
+
+```text
+public/
+  admin/       # approvals, exports, admin users/tasks, activity, summaries, KPI pages
+  api/         # JSON/data endpoints used by dashboard, mobile/offline sync, async UI
+  auth/        # account/profile/password recovery screens
+  masters/     # doctors, hospitals, medicines master-data management
+  reports/     # report listing, creation, editing, review view
+  tasks/       # task create/edit/view/delete workflow
+  assets/      # CSS, JS, icons
+  tools/       # locked-down diagnostics / dev utilities
+  dashboard.php
+  index.php
+  logout.php
+  notifications.php
+  setup.php
+  sw.js
+  manifest.webmanifest
+  offline.html
+```

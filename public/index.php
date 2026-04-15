@@ -34,7 +34,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 ?><!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Login · <?= e(APP_NAME) ?></title>
-<link rel="stylesheet" href="assets/style.css"></head>
+<link rel="stylesheet" href="<?= url('assets/style.css') ?>"></head>
 <body class="light auth">
   <div class="login-wrap">
     <div class="card login-card">
@@ -49,7 +49,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         <button class="btn primary block" type="submit">Sign in</button>
       </form>
       <div class="auth-links">
-        <a href="<?= url('forgot_password.php') ?>">Forgot password?</a>
+        <a href="<?= url('auth/forgot_password.php') ?>">Forgot password?</a>
       </div>
     </div>
   </div>
