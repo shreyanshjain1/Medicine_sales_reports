@@ -72,6 +72,7 @@ if ($prefill && $event_id) {
 }
 
 $errors = [];
+$fieldErrors = [];
 $warnings = [];
 $duplicates = [];
 $ok = false;
@@ -91,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $signature_data = trim($_POST['signature_data'] ?? '');
 
   // Validate (lightweight; offline flow also validates in JS)
-  if ($doctor_name === '') $errors[] = 'Doctor Name is required.';
-  if ($visit_datetime === '') $errors[] = 'Visit Date/Time is required.';
+  if ($doctor_name === '') { $errors[] = 'Doctor Name is required.'; $fieldErrors['doctor_name'] = 'Doctor name is required.'; }
+  if ($visit_datetime === '') { $errors[] = 'Visit Date/Time is required.'; $fieldErrors['visit_datetime'] = 'Visit date/time is required.'; }
 
   $warnings = report_quality_checks([
     'purpose' => $purpose,
@@ -203,26 +204,7 @@ include __DIR__.'/../header.php';
 <div class="card">
   <h2 class="titlecase">Add Meeting Report</h2>
 
-  <?php if ($ok): ?>
-    <div class="alert success">Report submitted.</div>
-  <?php endif; ?>
-
-  <?php if ($errors): ?>
-    <div class="alert">
-      <?php foreach ($errors as $e): ?>
-        <div><?= e($e) ?></div>
-      <?php endforeach; ?>
-    </div>
-  <?php endif; ?>
-
-  <?php if ($warnings): ?>
-    <div class="alert warning">
-      <strong>Submission quality checks</strong>
-      <?php foreach ($warnings as $w): ?>
-        <div><?= e($w) ?></div>
-      <?php endforeach; ?>
-    </div>
-  <?php endif; ?>
+  <?php form_messages($errors, $warnings, $ok ? 'Report submitted.' : ''); ?>
 
   <?php if ($duplicates): ?>
     <div class="alert warning">
@@ -233,48 +215,27 @@ include __DIR__.'/../header.php';
     </div>
   <?php endif; ?>
 
-  <form method="post" class="form" id="reportForm" enctype="multipart/form-data">
+  <form method="post" class="form crm-form" id="reportForm" enctype="multipart/form-data">
     <?php csrf_input(); ?>
 
     <div class="grid two">
-      <label>Doctor Name
-        <input name="doctor_name" value="<?= e($pre['doctor_name']) ?>" required>
-      </label>
-
-      <label>Doctor Email
-        <input name="doctor_email" value="<?= e($pre['doctor_email']) ?>" placeholder="NA">
-      </label>
-
-      <label>Purpose
-        <input name="purpose" value="<?= e($pre['purpose']) ?>">
-      </label>
-
-      <label>Medicine
-        <input name="medicine_name" value="<?= e($pre['medicine_name']) ?>">
-      </label>
-
-      <label>Hospital / Clinic
-        <input name="hospital_name" value="<?= e($pre['hospital_name']) ?>">
-      </label>
-
-      <label>Visit Date / Time
-        <input type="datetime-local" name="visit_datetime" value="<?= e($pre['visit_datetime']) ?>" required>
-      </label>
+      <?php render_text_input('Doctor Name', 'doctor_name', (string)$pre['doctor_name'], ['required'=>true], $fieldErrors); ?>
+      <?php render_text_input('Doctor Email', 'doctor_email', (string)$pre['doctor_email'], ['placeholder'=>'NA','type'=>'email'], $fieldErrors); ?>
+      <?php render_text_input('Purpose', 'purpose', (string)$pre['purpose'], ['placeholder'=>'Purpose of visit'], $fieldErrors); ?>
+      <?php render_text_input('Medicine', 'medicine_name', (string)$pre['medicine_name'], ['placeholder'=>'Medicine discussed'], $fieldErrors); ?>
+      <?php render_text_input('Hospital / Clinic', 'hospital_name', (string)$pre['hospital_name'], ['placeholder'=>'Hospital or clinic'], $fieldErrors); ?>
+      <?php render_text_input('Visit Date / Time', 'visit_datetime', (string)$pre['visit_datetime'], ['type'=>'datetime-local','required'=>true], $fieldErrors); ?>
     </div>
 
-    <label>Summary
-      <textarea name="summary" rows="3"><?= e($pre['summary']) ?></textarea>
+    <?php render_textarea_input('Summary', 'summary', (string)$pre['summary'], ['rows'=>3,'placeholder'=>'Key discussion points'], $fieldErrors); ?>
+    <?php render_textarea_input('Remarks', 'remarks', (string)$pre['remarks'], ['rows'=>3,'placeholder'=>'Follow-ups, commitments, or notes'], $fieldErrors); ?>
+
+    <label class="form-field"><span class="form-label">Attachment (optional)</span>
+      <input class="form-control" type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png">
+      <small class="field-hint">Allowed: PDF, JPG, JPEG, PNG</small>
     </label>
 
-    <label>Remarks
-      <textarea name="remarks" rows="3"><?= e($pre['remarks']) ?></textarea>
-    </label>
-
-    <label>Attachment (optional)
-      <input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png">
-    </label>
-
-    <div class="signature-block">
+    <div class="signature-block form-panel">
       <div class="sig-header">
         <h3>Doctor Signature</h3>
         <div class="sig-actions">
@@ -286,7 +247,7 @@ include __DIR__.'/../header.php';
       <input type="hidden" name="signature_data" id="signature_data">
     </div>
 
-    <div class="actions">
+    <div class="actions form-actions">
       <button class="btn primary" type="submit">Save Report</button>
     </div>
   </form>

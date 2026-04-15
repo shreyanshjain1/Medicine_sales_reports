@@ -2,7 +2,7 @@
 require_once __DIR__.'/../../init.php';
 require_manager();
 $title = 'Medicines Master';
-$errors=[]; $ok=''; $q=trim((string)getv('q','')); $editId=(int)getv('edit',0);
+$errors=[]; $fieldErrors=[]; $ok=''; $q=trim((string)getv('q','')); $editId=(int)getv('edit',0);
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_validate();
   $action=(string)post('action','save');
@@ -10,7 +10,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $id=(int)post('id',0); $stmt=$mysqli->prepare('UPDATE medicines_master SET active=0 WHERE id=? LIMIT 1'); if($stmt){ $stmt->bind_param('i',$id); $stmt->execute(); $stmt->close(); log_audit('medicine_master_archived','medicine_master',$id,'Medicine archived'); $ok='Medicine archived.'; }
   } else {
     $id=(int)post('id',0); $name=trim((string)post('name','')); $category=trim((string)post('category','')); $notes=trim((string)post('notes',''));
-    if($name==='') $errors[]='Medicine name is required.';
+    if($name==='') { $errors[]='Medicine name is required.'; $fieldErrors['name']='Medicine name is required.'; }
     if(!$errors){ if($id>0){ $stmt=$mysqli->prepare('UPDATE medicines_master SET name=?,category=?,notes=?,active=1 WHERE id=? LIMIT 1'); if($stmt){ $stmt->bind_param('sssi',$name,$category,$notes,$id); $stmt->execute(); $stmt->close(); log_audit('medicine_master_updated','medicine_master',$id,'Medicine updated'); $ok='Medicine updated.'; } } else { $stmt=$mysqli->prepare('INSERT INTO medicines_master (name,category,notes,active) VALUES (?,?,?,1)'); if($stmt){ $stmt->bind_param('sss',$name,$category,$notes); $stmt->execute(); $new=(int)$stmt->insert_id; $stmt->close(); log_audit('medicine_master_created','medicine_master',$new,'Medicine created'); $ok='Medicine added.'; } } $editId=0; }
   }
 }
@@ -24,14 +24,13 @@ include __DIR__.'/../header.php';
 <div class="grid two-panels masters-grid">
   <div class="card">
     <div class="section-head"><h3><?= $edit['id'] ? 'Edit medicine' : 'Add medicine' ?></h3><span class="pill neutral">Master Data</span></div>
-    <?php if($ok): ?><div class="alert success"><?= e($ok) ?></div><?php endif; ?>
-    <?php if($errors): ?><div class="alert danger"><?php foreach($errors as $e): ?><div><?= e($e) ?></div><?php endforeach; ?></div><?php endif; ?>
-    <form method="post" class="form"><?php csrf_input(); ?>
+    <?php form_messages($errors, [], $ok); ?>
+    <form method="post" class="form crm-form"><?php csrf_input(); ?>
       <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?= (int)$edit['id'] ?>">
-      <label>Name<input name="name" value="<?= e($edit['name']) ?>" required></label>
-      <label>Category<input name="category" value="<?= e($edit['category']) ?>" placeholder="Example: Antibiotic"></label>
-      <label>Notes<textarea name="notes" rows="3"><?= e($edit['notes']) ?></textarea></label>
-      <div class="actions-inline"><button class="btn primary" type="submit"><?= $edit['id'] ? 'Save Changes' : 'Add Medicine' ?></button><?php if($edit['id']): ?><a class="btn" href="<?= url('masters/medicines_master.php') ?>">Cancel</a><?php endif; ?></div>
+      <?php render_text_input('Name', 'name', (string)$edit['name'], ['required'=>true], $fieldErrors); ?>
+      <?php render_text_input('Category', 'category', (string)$edit['category'], ['placeholder'=>'Example: Antibiotic'], $fieldErrors); ?>
+      <?php render_textarea_input('Notes', 'notes', (string)$edit['notes'], ['rows'=>3], $fieldErrors); ?>
+      <div class="actions-inline form-actions"><button class="btn primary" type="submit"><?= $edit['id'] ? 'Save Changes' : 'Add Medicine' ?></button><?php if($edit['id']): ?><a class="btn" href="<?= url('masters/medicines_master.php') ?>">Cancel</a><?php endif; ?></div>
     </form>
   </div>
   <div class="card">

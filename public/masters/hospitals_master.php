@@ -2,7 +2,7 @@
 require_once __DIR__.'/../../init.php';
 require_manager();
 $title = 'Hospitals Master';
-$errors = []; $ok=''; $q = trim((string)getv('q','')); $editId=(int)getv('edit',0);
+$errors = []; $fieldErrors=[]; $ok=''; $q = trim((string)getv('q','')); $editId=(int)getv('edit',0);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_validate();
   $action = (string)post('action','save');
@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if($stmt){ $stmt->bind_param('i',$id); $stmt->execute(); $stmt->close(); log_audit('hospital_master_archived','hospital_master',$id,'Hospital archived'); $ok='Hospital archived.'; }
   } else {
     $id=(int)post('id',0); $name=trim((string)post('name','')); $city=trim((string)post('city','')); $address=trim((string)post('address','')); $notes=trim((string)post('notes',''));
-    if($name==='') $errors[]='Hospital or clinic name is required.';
+    if($name==='') { $errors[]='Hospital or clinic name is required.'; $fieldErrors['name']='Hospital or clinic name is required.'; }
     if(!$errors){
       if($id>0){ $stmt=$mysqli->prepare('UPDATE hospitals_master SET name=?,city=?,address=?,notes=?,active=1 WHERE id=? LIMIT 1'); if($stmt){ $stmt->bind_param('ssssi',$name,$city,$address,$notes,$id); $stmt->execute(); $stmt->close(); log_audit('hospital_master_updated','hospital_master',$id,'Hospital updated'); $ok='Hospital updated.'; } }
       else { $stmt=$mysqli->prepare('INSERT INTO hospitals_master (name,city,address,notes,active) VALUES (?,?,?,?,1)'); if($stmt){ $stmt->bind_param('ssss',$name,$city,$address,$notes); $stmt->execute(); $new=(int)$stmt->insert_id; $stmt->close(); log_audit('hospital_master_created','hospital_master',$new,'Hospital created'); $ok='Hospital added.'; } }
@@ -30,15 +30,14 @@ include __DIR__.'/../header.php';
 <div class="grid two-panels masters-grid">
   <div class="card">
     <div class="section-head"><h3><?= $edit['id'] ? 'Edit hospital / clinic' : 'Add hospital / clinic' ?></h3><span class="pill neutral">Master Data</span></div>
-    <?php if($ok): ?><div class="alert success"><?= e($ok) ?></div><?php endif; ?>
-    <?php if($errors): ?><div class="alert danger"><?php foreach($errors as $e): ?><div><?= e($e) ?></div><?php endforeach; ?></div><?php endif; ?>
-    <form method="post" class="form"><?php csrf_input(); ?>
+    <?php form_messages($errors, [], $ok); ?>
+    <form method="post" class="form crm-form"><?php csrf_input(); ?>
       <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?= (int)$edit['id'] ?>">
-      <label>Name<input name="name" value="<?= e($edit['name']) ?>" required></label>
-      <label>City<input name="city" value="<?= e($edit['city']) ?>"></label>
-      <label>Address<input name="address" value="<?= e($edit['address']) ?>"></label>
-      <label>Notes<textarea name="notes" rows="3"><?= e($edit['notes']) ?></textarea></label>
-      <div class="actions-inline"><button class="btn primary" type="submit"><?= $edit['id'] ? 'Save Changes' : 'Add Hospital' ?></button><?php if($edit['id']): ?><a class="btn" href="<?= url('masters/hospitals_master.php') ?>">Cancel</a><?php endif; ?></div>
+      <?php render_text_input('Name', 'name', (string)$edit['name'], ['required'=>true], $fieldErrors); ?>
+      <?php render_text_input('City', 'city', (string)$edit['city'], [], $fieldErrors); ?>
+      <?php render_text_input('Address', 'address', (string)$edit['address'], [], $fieldErrors); ?>
+      <?php render_textarea_input('Notes', 'notes', (string)$edit['notes'], ['rows'=>3], $fieldErrors); ?>
+      <div class="actions-inline form-actions"><button class="btn primary" type="submit"><?= $edit['id'] ? 'Save Changes' : 'Add Hospital' ?></button><?php if($edit['id']): ?><a class="btn" href="<?= url('masters/hospitals_master.php') ?>">Cancel</a><?php endif; ?></div>
     </form>
   </div>
   <div class="card">
