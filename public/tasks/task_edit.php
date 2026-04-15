@@ -45,6 +45,7 @@ $stmt->close();
 if (!$ev) { http_response_code(404); exit('Not found'); }
 
 $errors = [];
+$fieldErrors = [];
 $ok = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -67,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $attendees = post('attendees', []);
   if (!is_array($attendees)) $attendees = [];
 
-  if ($city === '') $errors[] = 'City is required.';
-  if ($start === '') $errors[] = 'Start date/time is required.';
+  if ($city === '') { $errors[] = 'City is required.'; $fieldErrors['city'] = 'City is required.'; }
+  if ($start === '') { $errors[] = 'Start date/time is required.'; $fieldErrors['start'] = 'Start date/time is required.'; }
 
   if ($doctor_id && $title === '') {
     $st = $mysqli->prepare("SELECT dr_name, hospital_address FROM doctors_masterlist WHERE id=? LIMIT 1");
@@ -223,88 +224,67 @@ if (!empty($repUsers)) {
 <div class="card">
   <h2 class="titlecase">Edit Task</h2>
 
-  <?php if ($errors): ?>
-    <div class="alert danger" style="margin-bottom:12px">
-      <?php foreach($errors as $er): ?><div><?= e($er) ?></div><?php endforeach; ?>
-    </div>
-  <?php endif; ?>
+  <?php form_messages($errors); ?>
 
-  <form class="form" method="post" action="<?= url('tasks/task_edit.php?id='.(int)$ev['id']) ?>">
+  <form class="form crm-form" method="post" action="<?= url('tasks/task_edit.php?id='.(int)$ev['id']) ?>">
     <?php csrf_input(); ?>
 
     <div class="grid two">
-      <label class="titlecase">Title
-        <input name="title" value="<?= e($ev['title'] ?? '') ?>" placeholder="(Optional — auto if doctor chosen)">
-      </label>
+<?php render_text_input('Title', 'title', (string)($ev['title'] ?? ''), ['placeholder'=>'Optional — auto if doctor chosen'], $fieldErrors); ?>
 
-      <label class="titlecase">City
-        <select name="city" id="edit_city" required>
+      <label class="form-field titlecase"><span class="form-label">City <span class="req">*</span></span>
+        <select class="<?= field_class($fieldErrors, 'city') ?>" name="city" id="edit_city" required>
           <option value="">Select City</option>
           <?php foreach($cities as $c): ?>
             <option value="<?= e($c) ?>" <?= ($c === ($ev['city'] ?? '')) ? 'selected' : '' ?>><?= e($c) ?></option>
           <?php endforeach; ?>
-        </select>
+        </select><?= field_error_html($fieldErrors, 'city') ?>
+        <small class="field-hint">Choose the city first to load doctors.</small>
       </label>
 
-      <label class="titlecase">Doctor
-        <select name="doctor_id" id="edit_doctor">
+      <label class="form-field titlecase"><span class="form-label">Doctor</span>
+        <select class="form-control" name="doctor_id" id="edit_doctor">
           <option value="">Select Doctor</option>
         </select>
-        <small class="muted">Current: <?= e($ev['dr_name'] ?? 'None') ?></small>
+        <small class="field-hint">Current: <?= e($ev['dr_name'] ?? 'None') ?></small>
       </label>
 
-      <label class="titlecase">Visit Date/Time
-        <input type="datetime-local" name="visit_datetime" value="<?= e(str_replace(' ', 'T', (string)($ev['visit_datetime'] ?? $ev['start'] ?? ''))) ?>">
-      </label>
+<?php render_text_input('Visit Date/Time', 'visit_datetime', (string)str_replace(' ', 'T', (string)($ev['visit_datetime'] ?? $ev['start'] ?? '')), ['type'=>'datetime-local'], $fieldErrors); ?>
 
-      <label class="titlecase">Start
-        <input type="datetime-local" name="start" required value="<?= e(str_replace(' ', 'T', (string)($ev['start'] ?? ''))) ?>">
-      </label>
+<?php render_text_input('Start', 'start', (string)str_replace(' ', 'T', (string)($ev['start'] ?? '')), ['type'=>'datetime-local','required'=>true], $fieldErrors); ?>
 
-      <label class="titlecase">End
-        <input type="datetime-local" name="end" value="<?= e(str_replace(' ', 'T', (string)($ev['end'] ?? ''))) ?>">
-      </label>
+<?php render_text_input('End', 'end', (string)str_replace(' ', 'T', (string)($ev['end'] ?? '')), ['type'=>'datetime-local'], $fieldErrors); ?>
 
-      <label class="chk titlecase" style="align-self:end">
+      <label class="chk form-check titlecase" style="align-self:end">
         <input type="checkbox" name="all_day" value="1" <?= !empty($ev['all_day']) ? 'checked' : '' ?>> All Day
       </label>
 
       <?php if (!empty($repUsers)): ?>
-        <label class="titlecase" style="grid-column:1/-1">Reps attending (optional)
-          <select name="attendees[]" multiple size="6">
+        <label class="form-field titlecase" style="grid-column:1/-1"><span class="form-label">Reps attending (optional)</span>
+          <select class="form-control" name="attendees[]" multiple size="6">
             <?php foreach($repUsers as $u): ?>
               <?php if ((int)$u['id'] === (int)$uid) continue; ?>
               <option value="<?= (int)$u['id'] ?>" <?= in_array((int)$u['id'], $selectedAtt, true) ? 'selected' : '' ?>><?= e($u['name']) ?> (<?= e($u['role']) ?>)</option>
             <?php endforeach; ?>
           </select>
-          <small class="muted">Hold Ctrl/⌘ to select multiple.</small>
+          <small class="field-hint">Hold Ctrl/⌘ to select multiple.</small>
         </label>
       <?php endif; ?>
     </div>
 
     <div class="grid two" style="margin-top:10px">
-      <label class="titlecase">Purpose
-        <input name="purpose" value="<?= e($ev['purpose'] ?? '') ?>">
-      </label>
+<?php render_text_input('Purpose', 'purpose', (string)($ev['purpose'] ?? ''), [], $fieldErrors); ?>
 
-      <label class="titlecase">Medicine Name
-        <input name="medicine_name" value="<?= e($ev['medicine_name'] ?? '') ?>">
-      </label>
+<?php render_text_input('Medicine Name', 'medicine_name', (string)($ev['medicine_name'] ?? ''), [], $fieldErrors); ?>
 
-      <label class="titlecase">Hospital / Clinic
-        <input name="hospital_name" value="<?= e($ev['hospital_name'] ?? '') ?>">
-      </label>
+<?php render_text_input('Hospital / Clinic', 'hospital_name', (string)($ev['hospital_name'] ?? ''), [], $fieldErrors); ?>
 
-      <label class="titlecase">Summary
-        <textarea name="summary" rows="3"><?= e($ev['summary'] ?? '') ?></textarea>
-      </label>
+<?php render_textarea_input('Summary', 'summary', (string)($ev['summary'] ?? ''), ['rows'=>3], $fieldErrors); ?>
 
-      <label class="titlecase">Remarks
-        <textarea name="remarks" rows="3"><?= e($ev['remarks'] ?? '') ?></textarea>
-      </label>
+<?php render_textarea_input('Remarks', 'remarks', (string)($ev['remarks'] ?? ''), ['rows'=>3], $fieldErrors); ?>
     </div>
 
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+    <div class="form-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
       <button class="btn primary" type="submit">Save Changes</button>
       <a class="btn" href="<?= url('tasks/task_view.php?id='.(int)$ev['id']) ?>">Cancel</a>
     </div>

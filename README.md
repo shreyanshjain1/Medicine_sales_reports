@@ -141,10 +141,8 @@ public/
 ```
 
 
-## Internal UI Layer
+## Latest internal improvements
 
-This project includes a lightweight reusable UI layer for PHP page composition:
-
-- `app/components/ui_components.php` for stat cards, badges, section headers, page heroes, and empty states
-- `public/partials/filter_bar.php` for reusable filter action rows
-- `public/partials/table_shell.php` for reusable table section wrappers
+- Shared form component helpers for consistent inputs, textareas, checkboxes, and grouped validation messages
+- Cleaner validation UI across report, task, profile, and master-data screens
+- Field-level inline errors so users can fix inputs faster without guessing

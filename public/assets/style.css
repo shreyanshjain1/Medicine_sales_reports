@@ -281,21 +281,22 @@ hr{ border: none; height: 1px; background: linear-gradient(90deg, transparent, #
   .sla-buckets,.sla-inline-grid{grid-template-columns:1fr}
 }
 
-
-/* Fix 17 reusable UI components */
-.ui-hero{margin-bottom:1rem}
-.ui-card-grid{margin-bottom:1rem}
-.ui-stat-card{position:relative;overflow:hidden}
-.ui-stat-card .summary-hint{margin-top:.35rem;font-size:.78rem;color:var(--muted)}
-.ui-tone-warning{border-color:#fde68a;background:#fffbeb}
-.ui-tone-danger{border-color:#fecaca;background:#fef2f2}
-.ui-tone-success{border-color:#bbf7d0;background:#ecfdf5}
-.ui-section-head{margin-bottom:.8rem;gap:1rem}
-.ui-filter-bar{align-items:end}
-.ui-filter-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
-.ui-badge{font-weight:700;text-transform:capitalize}
-.ui-empty-state{border:1px dashed var(--border);border-radius:14px;padding:1.2rem;text-align:center;background:#fafafa;color:var(--muted)}
-.ui-empty-icon{font-size:1.4rem;color:#9ca3af;margin-bottom:.35rem}
-.ui-empty-message{font-size:.95rem}
-.ui-empty-actions{margin-top:.8rem}
-.ui-table-shell{overflow:hidden}
+/* Fix 18 - shared form components */
+.crm-form{display:grid;gap:14px}
+.form-field{display:flex;flex-direction:column;gap:6px}
+.form-label{font-weight:600;color:#172033}
+.form-control{width:100%;padding:11px 12px;border:1px solid #d8deea;border-radius:12px;background:#fff;color:#172033;box-sizing:border-box}
+.form-control:focus, .crm-form input:focus, .crm-form select:focus, .crm-form textarea:focus{outline:none;border-color:#7c96ff;box-shadow:0 0 0 3px rgba(124,150,255,.16)}
+.form-control.is-invalid, .crm-form .is-invalid{border-color:#d9485f;box-shadow:0 0 0 3px rgba(217,72,95,.12)}
+.field-error{color:#b42318;font-size:.85rem;margin-top:2px}
+.field-hint{color:#667085;font-size:.84rem}
+.field-hint.block{display:block;margin-top:4px}
+.req{color:#d9485f}
+.form-alert{margin-bottom:14px}
+.form-list-errors{margin:8px 0 0 18px;padding:0}
+.form-inline-note{margin-top:2px}
+.form-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.form-panel{border:1px solid #e8edf7;border-radius:16px;padding:14px;background:#fbfcff}
+@media (max-width: 768px){
+  .crm-form .grid.two, .crm-form .grid{grid-template-columns:1fr !important}
+}

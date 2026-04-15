@@ -15,6 +15,7 @@ if (!isset($cols['active'])) { @ $mysqli->query("ALTER TABLE doctors_masterlist 
 $q = trim((string)getv('q',''));
 $editId = (int)getv('edit', 0);
 $errors = [];
+$fieldErrors = [];
 $ok = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_validate();
@@ -31,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim((string)post('email',''));
     $city = trim((string)post('city',''));
     $hospital = trim((string)post('hospital_name',''));
-    if ($name === '') $errors[] = 'Doctor name is required.';
+    if ($name === '') { $errors[] = 'Doctor name is required.'; $fieldErrors['doctor_name'] = 'Doctor name is required.'; }
     if (!$errors) {
       if ($id > 0) {
         $parts = ["{$nameCol}=?", 'active=1']; $vals = [$name]; $types='s';
@@ -77,17 +78,16 @@ include __DIR__.'/../header.php';
 <div class="grid two-panels masters-grid">
   <div class="card">
     <div class="section-head"><h3><?= $edit['id'] ? 'Edit doctor' : 'Add doctor' ?></h3><span class="pill neutral">Master Data</span></div>
-    <?php if($ok): ?><div class="alert success"><?= e($ok) ?></div><?php endif; ?>
-    <?php if($errors): ?><div class="alert danger"><?php foreach($errors as $e): ?><div><?= e($e) ?></div><?php endforeach; ?></div><?php endif; ?>
-    <form method="post" class="form">
+    <?php form_messages($errors, [], $ok); ?>
+    <form method="post" class="form crm-form">
       <?php csrf_input(); ?>
       <input type="hidden" name="action" value="save">
       <input type="hidden" name="id" value="<?= (int)$edit['id'] ?>">
-      <label>Doctor Name<input type="text" name="doctor_name" value="<?= e($edit['doctor_name']) ?>" required></label>
-      <label>Email<input type="email" name="email" value="<?= e($edit['email']) ?>"></label>
-      <label>City<input type="text" name="city" value="<?= e($edit['city']) ?>"></label>
-      <label>Hospital / Clinic<input type="text" name="hospital_name" value="<?= e($edit['hospital_name']) ?>"></label>
-      <div class="actions-inline">
+      <?php render_text_input('Doctor Name', 'doctor_name', (string)$edit['doctor_name'], ['type'=>'text','required'=>true], $fieldErrors); ?>
+      <?php render_text_input('Email', 'email', (string)$edit['email'], ['type'=>'email'], $fieldErrors); ?>
+      <?php render_text_input('City', 'city', (string)$edit['city'], [], $fieldErrors); ?>
+      <?php render_text_input('Hospital / Clinic', 'hospital_name', (string)$edit['hospital_name'], [], $fieldErrors); ?>
+      <div class="actions-inline form-actions">
         <button class="btn primary" type="submit"><?= $edit['id'] ? 'Save Changes' : 'Add Doctor' ?></button>
         <?php if($edit['id']): ?><a class="btn" href="<?= url('masters/doctors_master.php') ?>">Cancel</a><?php endif; ?>
       </div>
