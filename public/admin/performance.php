@@ -38,26 +38,15 @@ if (is_manager()) {
   <div class="alert success">Performance target saved.</div>
 <?php endif; ?>
 
-<div class="page-head">
-  <div>
-    <h1 class="titlecase">Performance & Territory KPIs</h1>
-    <p class="muted">Track monthly rep output, doctor coverage, hospital reach, and approval health in one place.</p>
-  </div>
-  <form method="get" class="form inline-form">
-    <label>Month
-      <input type="month" name="month" value="<?= e($month) ?>">
-    </label>
-    <button class="btn primary" type="submit">Apply</button>
-  </form>
-</div>
+<?php ui_page_hero('Performance & Territory KPIs', 'Track monthly rep output, doctor coverage, hospital reach, and approval health in one place.', '<form method="get" class="form inline-form"><label>Month<input type="month" name="month" value="'.e($month).'"></label><button class="btn primary" type="submit">Apply</button></form>'); ?>
 
 <div class="summary-grid">
-  <div class="card summary-card"><div class="summary-label">Total Reports</div><div class="summary-value"><?= (int)$summary['total_reports'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Approved</div><div class="summary-value"><?= (int)$summary['total_approved'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Pending</div><div class="summary-value"><?= (int)$summary['total_pending'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Coverage Doctors</div><div class="summary-value"><?= (int)$summary['total_doctors'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Coverage Hospitals</div><div class="summary-value"><?= (int)$summary['total_hospitals'] ?></div></div>
-  <div class="card summary-card"><div class="summary-label">Target Achievement</div><div class="summary-value"><?= (int)$summary['achievement_pct'] ?>%</div></div>
+  <?php ui_stat_card('Total Reports', (int)$summary['total_reports'], 'Monthly volume'); ?>
+  <?php ui_stat_card('Approved', (int)$summary['total_approved'], 'Accepted reports'); ?>
+  <?php ui_stat_card('Pending', (int)$summary['total_pending'], 'Awaiting review', 'warning'); ?>
+  <?php ui_stat_card('Coverage Doctors', (int)$summary['total_doctors'], 'Unique doctors'); ?>
+  <?php ui_stat_card('Coverage Hospitals', (int)$summary['total_hospitals'], 'Unique hospitals'); ?>
+  <?php ui_stat_card('Target Achievement', (int)$summary['achievement_pct'].'%', 'Against assigned target', 'success'); ?>
 </div>
 
 <div class="grid two performance-layout">
