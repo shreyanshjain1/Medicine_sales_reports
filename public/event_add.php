@@ -168,5 +168,22 @@ if ($newId > 0 && $attendees) {
   }
 }
 
+if ($newId > 0 && $attendees) {
+  $attendeeIds = array_values(array_unique(array_filter(array_map('intval', $attendees))));
+  foreach ($attendeeIds as $aid) {
+    if ($aid <= 0 || $aid === $uid) continue;
+    notify_user(
+      $aid,
+      'New task assigned',
+      'You were added to the task "' . $title . '".',
+      'task_assigned',
+      'task',
+      $newId,
+      url('task_view.php?id=' . $newId),
+      $uid
+    );
+  }
+}
+
 header('Location: ' . url('dashboard.php'));
 exit;
