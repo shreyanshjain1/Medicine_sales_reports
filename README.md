@@ -1,6 +1,6 @@
 # Medicine Sales CRM
 
-A business-focused PHP + MySQL CRM-style field reporting platform for medical representatives, district managers, and managers. The project is built to run cleanly on shared hosting while still covering approvals, notifications, performance tracking, exports, digests, and review workflows.
+A business-focused PHP + MySQL CRM-style field reporting platform for medical representatives, district managers, and managers. The project is built for shared hosting while still covering approvals, notifications, performance tracking, exports, digests, drafts, review workflows, and admin operations.
 
 ![PHP](https://img.shields.io/badge/PHP-8%2B-777BB4?logo=php&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8%2FMariaDB-4479A1?logo=mysql&logoColor=white)
@@ -8,15 +8,15 @@ A business-focused PHP + MySQL CRM-style field reporting platform for medical re
 ![Status](https://img.shields.io/badge/Status-Operations%20Ready-0f766e)
 
 ## What this project is
-Medicine Sales CRM is an internal operations platform for field teams. It centralizes visit reporting, manager approvals, task scheduling, territory performance, notifications, exports, and summary generation in a single procedural PHP application.
+Medicine Sales CRM is an internal operations platform for field teams. It centralizes visit reporting, manager approvals, task scheduling, territory performance, notifications, exports, digests, and summary generation in a single procedural PHP application with a cleaner internal architecture.
 
 ## Highlights
 - role-based access for manager, district manager, and employee
-- report submission with attachments, signatures, duplicate warnings, and quality checks
+- report submission with attachments, signatures, drafts, duplicate warnings, and quality checks
 - approval queue, approval SLA tracking, and report activity timelines
 - dashboard KPIs, performance tracking, and territory views
-- notification center and email-ready workflow hooks
-- master-data pages for doctors, hospitals, and medicines
+- notification center, email-ready workflow hooks, and digest presets
+- master-data pages for doctors, hospitals, and medicines with import/export support
 - manager summary and digest builder for leadership updates
 - shared-hosting-friendly structure without a heavy framework dependency
 
@@ -32,128 +32,107 @@ Medicine Sales CRM is an internal operations platform for field teams. It centra
 - Digest Builder
 - Doctors / Hospitals / Medicines Masters
 - Users and Tasks
-- Profile and Password Security
+- Profile, Password Security, and Settings
 
 ## Project structure
 ```text
 Medicine_sales_reports-main/
 ├── .github/
-│   └── workflows/
-│       └── php-lint.yml
-├── config.example.php
-├── init.php
+│   ├── ISSUE_TEMPLATE/
+│   ├── workflows/
+│   └── pull_request_template.md
+├── app/
+│   ├── bootstrap/
+│   ├── components/
+│   ├── helpers/
+│   ├── repositories/
+│   └── services/
 ├── database/
+│   ├── archive/
+│   ├── migrations/
 │   ├── schema.sql
+│   ├── install_fresh_latest.sql
+│   ├── install_with_demo_seed.sql
+│   ├── update_latest_bundle.sql
 │   ├── seed_demo.sql
 │   ├── legacy_upgrade_bundle.sql
-│   ├── README.md
-│   └── upgrade_v*.sql
+│   └── README.md
 ├── public/
-│   ├── activity_logs.php
-│   ├── admin_tasks.php
-│   ├── admin_users.php
-│   ├── approval_sla.php
-│   ├── approvals.php
-│   ├── change_password.php
-│   ├── dashboard.php
-│   ├── digest_builder.php
-│   ├── doctors_master.php
-│   ├── event_add.php
-│   ├── exports.php
-│   ├── forgot_password.php
-│   ├── header.php
-│   ├── hospitals_master.php
-│   ├── index.php
-│   ├── manager_summary.php
-│   ├── medicines_master.php
-│   ├── notifications.php
-│   ├── performance.php
-│   ├── profile.php
-│   ├── report_add.php
-│   ├── report_edit.php
-│   ├── report_view.php
-│   ├── reports.php
-│   ├── reset_password.php
-│   ├── setup.php
-│   ├── task_edit.php
+│   ├── admin/
+│   ├── api/
+│   ├── assets/
+│   │   ├── js/
+│   │   └── styles/
+│   ├── auth/
+│   ├── masters/
+│   ├── partials/
+│   ├── reports/
+│   ├── tasks/
 │   ├── tools/
-│   └── assets/
+│   ├── dashboard.php
+│   ├── footer.php
+│   ├── header.php
+│   ├── index.php
+│   ├── logout.php
+│   ├── manifest.webmanifest
+│   ├── notifications.php
+│   ├── offline.html
+│   ├── setup.php
+│   └── sw.js
 ├── storage/
 │   └── logs/
-└── uploads/
-    ├── attachments/
-    └── signatures/
+├── uploads/
+│   ├── attachments/
+│   └── signatures/
+├── config.example.php
+├── init.php
+└── README.md
 ```
 
 ## Database layout
-This repo now includes a cleaner database structure:
-- `database/schema.sql` is the single consolidated schema for fresh installs
-- `database/seed_demo.sql` is an optional seed template
-- `database/legacy_upgrade_bundle.sql` is a convenience reference for older installs
-- legacy `upgrade_v*.sql` files are still kept for backward compatibility and patch history
+This repo now supports a clearer database flow:
+- `database/schema.sql` — main schema source of truth for fresh installs
+- `database/install_fresh_latest.sql` — convenience copy of the latest fresh-install schema
+- `database/install_with_demo_seed.sql` — fresh install plus optional demo seed
+- `database/update_latest_bundle.sql` — one consolidated update bundle for older installs
+- `database/migrations/` — versioned upgrade files kept for patch history
+- `database/archive/` — older archived SQL files kept only for historical reference
 
 ## Setup
 ### Fresh install
 1. Copy `config.example.php` to `config.php`
 2. Set your database credentials and secrets in `config.php`
-3. Import `database/schema.sql`
+3. Import `database/install_fresh_latest.sql`
 4. Ensure these folders are writable:
    - `uploads/attachments`
    - `uploads/signatures`
    - `storage/logs`
 5. Open `public/`
 
+### Demo / local test install
+1. Copy `config.example.php` to `config.php`
+2. Set your database credentials and secrets
+3. Import `database/install_with_demo_seed.sql`
+4. Open `public/`
+
 ### Existing install
 1. Back up your current database and files
 2. Copy in the updated project files
-3. Prefer aligning older databases to the consolidated structure manually, or use the legacy upgrade SQL files if needed
+3. Import `database/update_latest_bundle.sql`
 4. Keep `config.php` intact
 
-## Notes
-- `setup.php` now reads from the consolidated schema file instead of duplicating table definitions inline
+## Architecture notes
+- `init.php` is now a thin bootstrap entry point
+- `app/bootstrap/` loads shared helpers, components, services, repositories, and runtime boot steps
+- `app/helpers/` holds cross-cutting app helpers
+- `app/services/` holds business-logic helpers for larger modules
+- `app/repositories/` holds schema/bootstrap persistence helpers
 - the app bootstraps missing `uploads/` and `storage/` folders automatically on startup
-- `public/error_log` should not be committed; runtime logs belong in `storage/logs/`
+
+## Notes
+- `setup.php` should only be enabled intentionally in controlled environments
+- runtime logs belong in `storage/logs/`, not in tracked public files
+- `public/assets/style.patch.css` is obsolete after the design-system consolidation and should not be kept
 
 ## Why this version is stronger
-This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, cleaner repo structure, consolidated database source-of-truth, and better separation between app files, uploads, and runtime logs.
-
-
-## Project Structure
-
-```text
-public/
-  admin/       # approvals, exports, admin users/tasks, activity, summaries, KPI pages
-  api/         # JSON/data endpoints used by dashboard, mobile/offline sync, async UI
-  auth/        # account/profile/password recovery screens
-  masters/     # doctors, hospitals, medicines master-data management
-  reports/     # report listing, creation, editing, review view
-  tasks/       # task create/edit/view/delete workflow
-  assets/      # CSS, JS, icons
-  tools/       # locked-down diagnostics / dev utilities
-  dashboard.php
-  index.php
-  logout.php
-  notifications.php
-  setup.php
-  sw.js
-  manifest.webmanifest
-  offline.html
-```
-
-
-## Latest internal improvements
-
-- Shared form component helpers for consistent inputs, textareas, checkboxes, and grouped validation messages
-- Cleaner validation UI across report, task, profile, and master-data screens
-- Field-level inline errors so users can fix inputs faster without guessing
-
-
-## Repo hygiene and settings
-The project now includes:
-- a centralized admin settings screen at `public/admin/settings.php`
-- GitHub issue templates for bugs and feature requests
-- a pull request template
-- a `CONTRIBUTING.md` guide
-- a basic `CODEOWNERS` file
-
-Settings are stored in the `app_settings` table and currently cover branding plus admin-facing operational defaults.
+This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, thinner bootstrap flow, more intentional folder structure, consolidated database entry files, and better separation between app code, uploads, and runtime logs.
