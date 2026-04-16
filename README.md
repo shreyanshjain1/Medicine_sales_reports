@@ -148,16 +148,14 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## Frontend styling
+## Frontend Architecture
 
-The main stylesheet is now a small entry file at `public/assets/style.css` that imports organized design-system partials from `public/assets/styles/`.
+The frontend JavaScript is now organized into a small modular structure under `public/assets/js/`:
 
-Current styling layers:
-- `tokens.css` for color, spacing, radius, and shadow variables
-- `base.css` for document-level defaults
-- `layout.css` for topbar, grid, sidebar, login, and responsive structure
-- `components.css` for cards, alerts, buttons, badges, and common surfaces
-- `forms.css` for inputs, filters, and validation states
-- `tables.css` for table shells and pagination
-- `overlays.css` for modal/drawer shell styling
-- `utilities.css` for print rules and utility helpers
+- `core.js` for shared UI behaviors like confirm prompts and clock rendering
+- `quick-task.js` for Select2-backed city/doctor quick-task behavior
+- `offline-reports.js` for IndexedDB outbox, offline report save, sync, and signature fallback
+- `pwa.js` for service worker registration
+- `app.js` as the lightweight bootstrap entry that initializes registered modules
+
+The PWA cache strategy in `public/sw.js` has also been refreshed to match the restructured routes under `public/reports/` and `public/auth/`.

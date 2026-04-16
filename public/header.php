@@ -3,7 +3,7 @@ require_once __DIR__.'/../init.php';
 require_login();
 
 // Used for conditional asset loading (important for offline mode)
-$activePage = current_script_name();
+$activePage = basename($_SERVER['PHP_SELF'] ?? '');
 ?>
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,21 +13,16 @@ $activePage = current_script_name();
 <meta name="theme-color" content="#0f766e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" type="image/png" sizes="192x192" href="<?= asset_url('icons/icon-192.png') ?>">
-<link rel="icon" type="image/png" sizes="512x512" href="<?= asset_url('icons/icon-512.png') ?>">
+<link rel="icon" type="image/png" sizes="192x192" href="<?= url('assets/icons/icon-192.png') ?>">
+<link rel="icon" type="image/png" sizes="512x512" href="<?= url('assets/icons/icon-512.png') ?>">
 
 <script>
   window.CSRF_TOKEN = "<?= e(csrf_token()) ?>";
   window.BASE_URL = "<?= e(BASE_URL_EFFECTIVE) ?>";
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('<?= url('sw.js') ?>').catch(()=>{});
-    });
-  }
 </script>
 
-<link rel="stylesheet" href="<?= asset_url('style.css') ?>">
-<link rel="stylesheet" href="<?= asset_url('calendar.css') ?>">
+<link rel="stylesheet" href="<?= url('assets/style.css') ?>">
+<link rel="stylesheet" href="<?= url('assets/calendar.css') ?>">
 
 <!-- ✅ Select2 (single searchable dropdown for touch devices) -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -41,12 +36,16 @@ $activePage = current_script_name();
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 <?php endif; ?>
 
-<script src="<?= asset_url('app.js') ?>" defer></script>
+<script src="<?= url('assets/app.js') ?>" defer></script>
+<script src="<?= url('assets/js/core.js') ?>" defer></script>
+<script src="<?= url('assets/js/quick-task.js') ?>" defer></script>
+<script src="<?= url('assets/js/offline-reports.js') ?>" defer></script>
+<script src="<?= url('assets/js/pwa.js') ?>" defer></script>
 </head>
 <body class="light">
 
 <header class="topbar glass">
-  <?php $active = current_script_name(); ?>
+  <?php $active = basename($_SERVER['PHP_SELF']); ?>
   <div class="brand titlecase"><?= e(COMPANY_NAME) ?> · Reporting</div>
   <nav class="nav titlecase">
     <a class="<?= $active==='dashboard.php'?'active':'' ?>" href="<?= url('dashboard.php') ?>">Dashboard</a>
