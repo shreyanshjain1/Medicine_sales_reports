@@ -114,6 +114,52 @@ function ensure_performance_schema(): void {
 
 ensure_performance_schema();
 
+
+function ensure_task_workflow_schema(): void {
+  if (!empty($_SESSION['_task_workflow_schema_v16'])) return;
+  $_SESSION['_task_workflow_schema_v16'] = 1;
+
+  if (_col_exists('events','id')) {
+    if (!_col_exists('events','parent_event_id'))   _try_sql("ALTER TABLE events ADD COLUMN parent_event_id INT NULL AFTER user_id");
+    if (!_col_exists('events','status'))            _try_sql("ALTER TABLE events ADD COLUMN status ENUM('planned','in_progress','completed','cancelled','overdue') NOT NULL DEFAULT 'planned' AFTER remarks");
+    if (!_col_exists('events','recurrence_pattern'))_try_sql("ALTER TABLE events ADD COLUMN recurrence_pattern ENUM('none','daily','weekly','monthly') NOT NULL DEFAULT 'none' AFTER status");
+    if (!_col_exists('events','recurrence_until'))  _try_sql("ALTER TABLE events ADD COLUMN recurrence_until DATE NULL AFTER recurrence_pattern");
+    if (!_col_exists('events','recurrence_count'))  _try_sql("ALTER TABLE events ADD COLUMN recurrence_count INT NOT NULL DEFAULT 0 AFTER recurrence_until");
+    _try_sql("ALTER TABLE events ADD INDEX idx_events_status (status)");
+    _try_sql("ALTER TABLE events ADD INDEX idx_events_parent (parent_event_id)");
+  }
+}
+ensure_task_workflow_schema();
+
+function task_status_options(): array {
+  return [
+    'planned' => 'Planned',
+    'in_progress' => 'In Progress',
+    'completed' => 'Completed',
+    'cancelled' => 'Cancelled',
+    'overdue' => 'Overdue',
+  ];
+}
+
+function task_status_badge_class(string $status): string {
+  return match ($status) {
+    'completed' => 'success',
+    'in_progress' => 'warning',
+    'cancelled' => 'danger',
+    'overdue' => 'danger',
+    default => 'info',
+  };
+}
+
+function task_recurrence_options(): array {
+  return [
+    'none' => 'Does not repeat',
+    'daily' => 'Daily',
+    'weekly' => 'Weekly',
+    'monthly' => 'Monthly',
+  ];
+}
+
 function current_target_month(): string {
   return date('Y-m');
 }
@@ -434,64 +480,3 @@ function fetch_reviewer_backlog(int $limit=10): array {
 }
 
 ?>
-
-if (!function_exists('csv_rows_from_upload')) {
-function csv_rows_from_upload(string $field): array {
-  if (empty($_FILES[$field]['tmp_name']) || !is_uploaded_file($_FILES[$field]['tmp_name'])) return [];
-  $handle = fopen($_FILES[$field]['tmp_name'], 'r');
-  if (!$handle) return [];
-  $rows = [];
-  $headers = [];
-  while (($row = fgetcsv($handle)) !== false) {
-    if (!$headers) {
-      $headers = array_map(function($v){ return strtolower(trim((string)$v)); }, $row);
-      continue;
-    }
-    if (!array_filter($row, fn($v)=>trim((string)$v)!=='')) continue;
-    $item = [];
-    foreach ($headers as $i => $h) $item[$h] = trim((string)($row[$i] ?? ''));
-    $rows[] = $item;
-  }
-  fclose($handle);
-  return $rows;
-}}
-
-if (!function_exists('csv_download')) {
-function csv_download(string $filename, array $headers, array $rows): void {
-  header('Content-Type: text/csv; charset=utf-8');
-  header('Content-Disposition: attachment; filename="'.$filename.'"');
-  $out = fopen('php://output', 'w');
-  fputcsv($out, $headers);
-  foreach ($rows as $row) fputcsv($out, $row);
-  fclose($out);
-  exit;
-}}
-
-if (!function_exists('master_normalize_key')) {
-function master_normalize_key(string $value): string {
-  $value = strtolower(trim($value));
-  $value = preg_replace('/[^a-z0-9]+/i', ' ', $value);
-  return trim((string)$value);
-}}
-
-if (!function_exists('master_find_possible_duplicates')) {
-function master_find_possible_duplicates(string $table, string $nameColumn, string $name, int $excludeId = 0, array $extraLikeColumns = []): array {
-  global $mysqli;
-  $name = trim($name);
-  if ($name === '') return [];
-  $safe = '%'.$mysqli->real_escape_string($name).'%';
-  $conditions = ["{$nameColumn} LIKE '{$safe}'"];
-  foreach ($extraLikeColumns as $col => $value) {
-    $value = trim((string)$value);
-    if ($value !== '') {
-      $safeVal = '%'.$mysqli->real_escape_string($value).'%';
-      $conditions[] = "{$col} LIKE '{$safeVal}'";
-    }
-  }
-  $sql = "SELECT * FROM {$table} WHERE active=1 AND (".implode(' OR ', $conditions).")";
-  if ($excludeId > 0) $sql .= " AND id<>".(int)$excludeId;
-  $sql .= " ORDER BY {$nameColumn} ASC LIMIT 10";
-  $rows = [];
-  if ($res = $mysqli->query($sql)) { while($row = $res->fetch_assoc()) $rows[] = $row; $res->free(); }
-  return $rows;
-}}

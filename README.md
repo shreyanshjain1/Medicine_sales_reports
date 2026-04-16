@@ -148,7 +148,7 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## Latest Admin Data Tools
-- Duplicate detection in doctors, hospitals, and medicines masters
-- CSV import for master records
-- CSV export for filtered master lists
+## PR 27 Task Workflow
+- Added a task status pipeline: planned, in progress, completed, cancelled, and overdue.
+- Added simple recurring task support for daily, weekly, and monthly visit generation.
+- Added admin task filtering by status and recurrence visibility.
