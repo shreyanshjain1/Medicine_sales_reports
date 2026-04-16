@@ -6,10 +6,6 @@ $info='';
 if(isset($_GET['reset']) && $_GET['reset']==='success'){
   $info='Password updated successfully. Please sign in with your new password.';
 }
-if(isset($_GET['timeout'])){
-  $map=['idle'=>'Your session expired due to inactivity. Please sign in again.','absolute'=>'Your session reached the security limit. Please sign in again.'];
-  $info=$map[$_GET['timeout']] ?? 'Please sign in again.';
-}
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_verify();
   $email=normalize_email(trim(post('email','')));
@@ -26,7 +22,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($u=$res->fetch_assoc()){
       if((int)$u['active'] === 1 && password_verify($pass,$u['password_hash'])){
         $_SESSION['user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role'=>role_norm($u['role']),'wants_email_notifications'=>(int)($u['wants_email_notifications'] ?? 1)];
-        session_mark_login((int)$u['id']);
         record_login_attempt($email, true);
         log_audit('login_success', 'user', (int)$u['id'], 'Successful sign in');
         header('Location: '.url('dashboard.php')); exit;
@@ -38,13 +33,13 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 }
 ?><!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login · <?= e(APP_NAME) ?></title>
+<title>Login · <?= e(app_name_value()) ?></title>
 <link rel="stylesheet" href="<?= url('assets/style.css') ?>"></head>
 <body class="light auth">
   <div class="login-wrap">
     <div class="card login-card">
-      <h1 class="logo">Pharmastar</h1>
-      <h2 class="subtitle">Reporting</h2>
+      <h1 class="logo"><?= e(company_name_value()) ?></h1>
+      <h2 class="subtitle"><?= e(app_name_value()) ?></h2>
       <?php if($info): ?><div class="alert success"><?= e($info) ?></div><?php endif; ?>
       <?php if($error): ?><div class="alert"><?= e($error) ?></div><?php endif; ?>
       <form method="post" class="form compact">

@@ -17,7 +17,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($u && (int)$u['active']===1){
       $token = create_password_reset_token((int)$u['id']);
       $resetLink = url('auth/reset_password.php?selector=' . urlencode($token['selector']) . '&validator=' . urlencode($token['validator']));
-      $subject = APP_NAME . ' · Reset your password';
+      $subject = app_name_value() . ' · Reset your password';
       $body = 'A password reset was requested for your account. Use the secure link below to set a new password. This link expires at ' . date('M d, Y h:i A', strtotime($token['expires_at'])) . '.';
       $html = notification_email_html('Reset your password', $body, $resetLink);
       $sent = send_app_mail((string)$u['email'], $subject, $html, $body, 'user', (int)$u['id']);
@@ -29,7 +29,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 }
 ?><!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= e($title) ?> · <?= e(APP_NAME) ?></title>
+<title><?= e($title) ?> · <?= e(app_name_value()) ?></title>
 <link rel="stylesheet" href="<?= url('assets/style.css') ?>"></head>
 <body class="light auth">
   <div class="login-wrap">

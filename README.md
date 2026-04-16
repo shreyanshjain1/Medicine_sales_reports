@@ -148,9 +148,12 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## Security updates
-- idle session timeout with warning banner
-- absolute session lifetime limit
-- session ID regeneration on login
-- last login timestamp and IP capture
-- expanded audit coverage for user/admin actions
+## Repo hygiene and settings
+The project now includes:
+- a centralized admin settings screen at `public/admin/settings.php`
+- GitHub issue templates for bugs and feature requests
+- a pull request template
+- a `CONTRIBUTING.md` guide
+- a basic `CODEOWNERS` file
+
+Settings are stored in the `app_settings` table and currently cover branding plus admin-facing operational defaults.
