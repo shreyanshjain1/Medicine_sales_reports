@@ -148,7 +148,16 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## Routing and path helpers
-- Shared route, asset, and API URL helpers are loaded from `app/helpers/path_helpers.php`.
-- Nested pages should use `route_url()`, `asset_url()`, and `api_url()` instead of brittle relative paths.
+## Frontend styling
 
+The main stylesheet is now a small entry file at `public/assets/style.css` that imports organized design-system partials from `public/assets/styles/`.
+
+Current styling layers:
+- `tokens.css` for color, spacing, radius, and shadow variables
+- `base.css` for document-level defaults
+- `layout.css` for topbar, grid, sidebar, login, and responsive structure
+- `components.css` for cards, alerts, buttons, badges, and common surfaces
+- `forms.css` for inputs, filters, and validation states
+- `tables.css` for table shells and pagination
+- `overlays.css` for modal/drawer shell styling
+- `utilities.css` for print rules and utility helpers

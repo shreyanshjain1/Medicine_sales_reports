@@ -1,0 +1,11 @@
+.form label{display:block;margin:.6rem 0}
+.form.compact label{margin:.4rem 0}
+.form input,.form select,.form textarea{
+  width:100%;padding:.6rem;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:var(--text)
+}
+.form input:focus,.form select:focus,.form textarea:focus{
+  outline:none;border-color:#6ee7b7;box-shadow:0 0 0 3px rgba(16,185,129,.12)
+}
+.form .chk{display:flex;align-items:center;gap:.5rem}
+.filters{display:flex;gap:.6rem;flex-wrap:wrap;margin:.5rem 0 1rem}
+.filters > *{min-width:180px}

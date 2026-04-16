@@ -1,0 +1,10 @@
+.flex-between{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
+.titlecase{text-transform:capitalize}
+h1,h2,h3.titlecase{letter-spacing:.2px}
+.gap-s>*+*{margin-top:.6rem}
+.stretch{display:flex;flex-direction:column}
+@media print{
+  header, aside, .footer, .btn, .nav, .quick-links { display:none !important; }
+  .container{grid-template-columns:1fr; margin:0; padding:0}
+  .card{border:none; box-shadow:none}
+}
