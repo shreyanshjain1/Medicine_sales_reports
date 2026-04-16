@@ -69,9 +69,9 @@ $title='Edit Report #'.$id; include __DIR__.'/../header.php';
     <?php render_textarea_input('Summary', 'summary', (string)$r['summary'], ['rows'=>4,'placeholder'=>'Key discussion points'], $fieldErrors); ?>
     <?php render_textarea_input('Remarks', 'remarks', (string)$r['remarks'], ['rows'=>3,'placeholder'=>'Follow-ups, commitments, or notes'], $fieldErrors); ?>
     <p>Current Status: <span class="badge <?= e($r['status'] ?: 'pending') ?>"><?= e($r['status'] ?: 'pending') ?></span></p>
-    <?php if(!empty($r['attachment_path'])): ?><p>Attachment: <a target="_blank" href="<?= e(ATTACH_URL.'/'.basename((string)$r['attachment_path'])) ?>">Download current attachment</a></p><?php endif; ?>
+    <?php if(!empty($r['attachment_path'])): ?><p>Attachment: <a target="_blank" href="<?= e(attach_url_for($r['attachment_path'])) ?>">Download current attachment</a></p><?php endif; ?>
     <label class="form-field"><span class="form-label">Replace / Add Attachment</span><input class="form-control" type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png"><small class="field-hint">Allowed: PDF, JPG, JPEG, PNG</small></label>
-    <div class="actions-inline form-actions"><button class="btn primary" type="submit">Save Changes</button><a class="btn" href="report_view.php?id=<?= (int)$r['id'] ?>">Back</a></div>
+    <div class="actions-inline form-actions"><button class="btn primary" type="submit">Save Changes</button><a class="btn" href="<?= route_url('reports/report_view.php', ['id'=>(int)$r['id']]) ?>">Back</a></div>
   </form>
 </div>
 <script>

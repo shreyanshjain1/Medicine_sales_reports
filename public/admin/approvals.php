@@ -73,7 +73,7 @@ $title='Approvals'; include __DIR__.'/../header.php';
           <td><?= e($row['hospital_name']) ?></td>
           <td><?= e((string)$row['visit_datetime']) ?></td>
           <td><?= ui_badge((string)$row['status'], (string)$row['status']) ?></td>
-          <td><a class="btn tiny primary" href="report_view.php?id=<?= (int)$row['id'] ?>">Review</a></td>
+          <td><a class="btn tiny primary" href="<?= route_url('reports/report_view.php', ['id'=>(int)$row['id']]) ?>">Review</a></td>
         </tr>
       <?php endforeach; endif; ?>
       </tbody>

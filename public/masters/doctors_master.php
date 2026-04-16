@@ -111,7 +111,7 @@ include __DIR__.'/../header.php';
           <td><?= e($row['email']) ?></td>
           <td>
             <div class="table-actions">
-              <a class="btn tiny" href="doctors_master.php?edit=<?= (int)$row['id'] ?>">Edit</a>
+              <a class="btn tiny" href="<?= route_url('masters/doctors_master.php', ['edit'=>(int)$row['id']]) ?>">Edit</a>
               <form method="post" onsubmit="return confirm('Archive this doctor?');">
                 <?php csrf_input(); ?>
                 <input type="hidden" name="action" value="delete">

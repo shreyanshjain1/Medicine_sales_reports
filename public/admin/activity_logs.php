@@ -102,7 +102,7 @@ $title = 'Activity Logs'; include __DIR__.'/../header.php';
           <td>
             <div><?= e((string)($row['details'] ?: '—')) ?></div>
             <?php if (($row['entity_type'] ?? '') === 'report' && !empty($row['entity_id'])): ?>
-              <div style="margin-top:8px"><a class="btn tiny" href="report_view.php?id=<?= (int)$row['entity_id'] ?>">Open report</a></div>
+              <div style="margin-top:8px"><a class="btn tiny" href="<?= route_url('reports/report_view.php', ['id'=>(int)$row['entity_id']]) ?>">Open report</a></div>
             <?php endif; ?>
           </td>
         </tr>

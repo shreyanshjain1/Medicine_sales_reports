@@ -258,11 +258,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canReview) {
     'report_review',
     'report',
     $id,
-    url('reports/report_view.php?id=' . $id),
+    route_url('reports/report_view.php', ['id'=>$id]),
     (int)(user()['id'] ?? 0)
   );
 
-  header('Location: ' . url('reports/report_view.php?id=' . $id));
+  header('Location: ' . route_url('reports/report_view.php', ['id'=>$id]));
   exit;
 }
 
@@ -317,14 +317,14 @@ if (!in_array($st, ['pending', 'approved', 'needs_changes'], true)) $st = 'pendi
 
   <?php if (!empty($r['attachment_path'])): ?>
     <p><strong>Attachment:</strong>
-      <a target="_blank" href="<?= e(ATTACH_URL . '/' . basename($r['attachment_path'])) ?>">Download</a>
+      <a target="_blank" href="<?= e(attach_url_for($r['attachment_path'])) ?>">Download</a>
     </p>
   <?php endif; ?>
 
   <?php if (!empty($r['signature_path'])): ?>
     <p><strong>Signature:</strong><br>
       <img style="max-width:420px;background:#fff;padding:6px;border-radius:6px"
-           src="<?= e(SIGNATURE_URL . '/' . basename($r['signature_path'])) ?>">
+           src="<?= e(signature_url_for($r['signature_path'])) ?>">
     </p>
   <?php endif; ?>
 

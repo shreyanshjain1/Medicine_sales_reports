@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if (!in_array($ext, $allowed, true)) {
         $errors[] = 'Invalid attachment type. Allowed: PDF/JPG/PNG.';
       } else {
-        $dir = __DIR__ . '/../uploads/attachments';
+        $dir = ATTACH_DIR;
         if (!is_dir($dir)) @mkdir($dir, 0775, true);
 
         $fname = 'att_' . (int)user()['id'] . '_' . time() . '.' . $ext;
@@ -132,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Save signature if present (base64 PNG)
     $signature_path = null;
     if ($signature_data && str_starts_with($signature_data, 'data:image')) {
-      $dir = __DIR__ . '/../uploads/signatures';
+      $dir = SIGNATURE_DIR;
       if (!is_dir($dir)) @mkdir($dir, 0775, true);
 
       $sigName = 'sig_' . (int)user()['id'] . '_' . time() . '.png';
