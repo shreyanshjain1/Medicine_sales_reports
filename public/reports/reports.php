@@ -47,11 +47,12 @@ $stats = $statsRes ? ($statsRes->fetch_assoc() ?: []) : [];
 if ($isManager) $usersRes = $mysqli->query("SELECT id,name FROM users ORDER BY name");
 elseif ($isDistrict) { $dmId=(int)user()['id']; $usersRes=$mysqli->query("SELECT id,name FROM users WHERE id={$dmId} OR district_manager_id={$dmId} ORDER BY name"); }
 else $usersRes = null;
+$draftRows = fetch_user_report_drafts((int)user()['id'], 6);
 $title='Reports'; include __DIR__.'/../header.php';
 ?>
 <?php ob_start(); ?>
 <?php if($isManager || $isDistrict): ?><a class="btn" href="<?= url('admin/approvals.php') ?>">Open Approval Queue</a><?php endif; ?>
-<a class="btn primary" href="<?= url('reports/report_add.php') ?>">Create Report</a>
+<a class="btn" href="<?= url('reports/report_add.php') ?>">Create Report</a>
 <?php $reportsHeroActions = ob_get_clean(); ui_page_hero('Reports', 'Filter, review, and manage field submissions in one CRM-style workspace.', $reportsHeroActions); ?>
 <div class="summary-grid summary-grid-dashboard">
   <?php ui_stat_card('Total Results', (int)$total, 'Current filtered dataset'); ?>
@@ -59,8 +60,25 @@ $title='Reports'; include __DIR__.'/../header.php';
   <?php ui_stat_card('Doctors', (int)($stats['doctors_count'] ?? 0), 'Unique doctors'); ?>
   <?php ui_stat_card('Hospitals', (int)($stats['hospitals_count'] ?? 0), 'Covered accounts'); ?>
   <?php ui_stat_card('Medicines', (int)($stats['medicines_count'] ?? 0), 'Products mentioned'); ?>
-  <?php ui_stat_card('Needs Changes', (int)($stats['needs_changes_count'] ?? 0), 'Returned to reps', 'danger'); ?>
+  <?php ui_stat_card('My Drafts', count($draftRows), 'Saved report drafts'); ?>
 </div>
+<?php if ($draftRows): ?>
+<div class="card">
+  <?php ui_section_head('My Draft Queue', 'Continue a saved submission without losing work'); ?>
+  <div class="table-wrap">
+    <table class="table"><thead><tr><th>Draft</th><th>Visit</th><th>Updated</th><th>Action</th></tr></thead><tbody>
+      <?php foreach($draftRows as $draft): ?>
+        <tr>
+          <td><strong><?= e($draft['doctor_name'] ?: 'Untitled Draft') ?></strong><br><small class="muted"><?= e($draft['medicine_name'] ?: 'No medicine yet') ?></small></td>
+          <td><?= e($draft['visit_datetime'] ?: 'Not set') ?></td>
+          <td><?= e((string)$draft['updated_at']) ?></td>
+          <td><a class="btn tiny" href="<?= e(url('reports/report_add.php?draft_id='.(int)$draft['id'])) ?>">Resume Draft</a></td>
+        </tr>
+      <?php endforeach; ?>
+    </tbody></table>
+  </div>
+</div>
+<?php endif; ?>
 <div class="card">
   <?php ob_start(); ?>
     <?php if($isManager || $isDistrict): ?>
@@ -100,7 +118,7 @@ $title='Reports'; include __DIR__.'/../header.php';
           <td><?= e($r['hospital_name']) ?></td>
           <td><?= $r['visit_datetime'] ? e(date('Y-m-d H:i', strtotime($r['visit_datetime']))) : '—' ?></td>
           <td><?= ui_badge((string)($r['status'] ?: 'pending'), (string)($r['status'] ?: 'pending')) ?></td>
-          <td><div class="actions-inline"><a class="btn tiny" href="<?= route_url('reports/report_view.php', ['id'=>(int)$r['id']]) ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="<?= route_url('reports/report_edit.php', ['id'=>(int)$r['id']]) ?>">Edit</a><?php endif; ?></div></td>
+          <td><div class="actions-inline"><a class="btn tiny" href="report_view.php?id=<?= (int)$r['id'] ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="report_edit.php?id=<?= (int)$r['id'] ?>">Edit</a><?php endif; ?></div></td>
         </tr>
       <?php endforeach; endif; ?>
       </tbody>
