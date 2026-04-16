@@ -4,6 +4,8 @@ require_once __DIR__.'/../../init.php'; require_login();
 $prefill = (int)($_GET['prefill'] ?? 0);
 $doctor_id = (int)($_GET['doctor_id'] ?? 0);
 $event_id = (int)($_GET['event_id'] ?? 0);
+$draft_id = (int)($_GET['draft_id'] ?? 0);
+$draftLoaded = null;
 
 $pre = [
   'doctor_name'   => '',
@@ -16,18 +18,26 @@ $pre = [
   'remarks'       => '',
 ];
 
+if ($draft_id > 0) {
+  $draftLoaded = fetch_report_draft($draft_id, (int)user()['id']);
+  if ($draftLoaded) {
+    foreach ($pre as $k => $v) {
+      $pre[$k] = (string)($draftLoaded[$k] ?? $v);
+    }
+    if (!empty($pre['visit_datetime'])) $pre['visit_datetime'] = str_replace(' ', 'T', substr($pre['visit_datetime'], 0, 16));
+  }
+}
+
 if ($prefill && $doctor_id) {
-  // Basic prefill from doctors_masterlist (best-effort)
   $stmt = $mysqli->prepare("SELECT dr_name, email, hospital_address, place FROM doctors_masterlist WHERE id=? LIMIT 1");
   if ($stmt) {
     $stmt->bind_param("i", $doctor_id);
     if ($stmt->execute()) {
       $r = $stmt->get_result()->fetch_assoc();
       if ($r) {
-        $pre['doctor_name']   = $r['dr_name'] ?? '';
-        $pre['doctor_email']  = trim((string)($r['email'] ?? ''));
-        if ($pre['doctor_email'] === '') $pre['doctor_email'] = 'NA';
-        $pre['hospital_name'] = $r['hospital_address'] ?? '';
+        if ($pre['doctor_name'] === '') $pre['doctor_name'] = $r['dr_name'] ?? '';
+        if ($pre['doctor_email'] === '') $pre['doctor_email'] = trim((string)($r['email'] ?? '')) ?: 'NA';
+        if ($pre['hospital_name'] === '') $pre['hospital_name'] = $r['hospital_address'] ?? '';
       }
     }
     $stmt->close();
@@ -35,8 +45,6 @@ if ($prefill && $doctor_id) {
 }
 
 if ($prefill && $event_id) {
-  // Optional prefill from events table if present
-  // NOTE: older DBs may not have these columns yet; keep this best-effort and never break the page.
   try {
     $stmt = $mysqli->prepare("SELECT purpose, medicine_name, hospital_name, visit_datetime, summary, remarks, start FROM events WHERE id=? LIMIT 1");
     if ($stmt) {
@@ -44,31 +52,16 @@ if ($prefill && $event_id) {
       if ($stmt->execute()) {
         $r = $stmt->get_result()->fetch_assoc();
         if ($r) {
-          $pre['purpose']        = $r['purpose'] ?? $pre['purpose'];
-          $pre['medicine_name']  = $r['medicine_name'] ?? $pre['medicine_name'];
-          $pre['hospital_name']  = $r['hospital_name'] ?? $pre['hospital_name'];
-          $pre['visit_datetime'] = $r['visit_datetime'] ?? $pre['visit_datetime'];
-          $pre['summary']        = $r['summary'] ?? $pre['summary'];
-          $pre['remarks']        = $r['remarks'] ?? $pre['remarks'];
-          if ($pre['visit_datetime'] === '' && !empty($r['start'])) $pre['visit_datetime'] = (string)$r['start'];
+          foreach (['purpose','medicine_name','hospital_name','summary','remarks'] as $k) {
+            if ($pre[$k] === '' && !empty($r[$k])) $pre[$k] = (string)$r[$k];
+          }
+          if ($pre['visit_datetime'] === '' && !empty($r['visit_datetime'])) $pre['visit_datetime'] = str_replace(' ', 'T', substr((string)$r['visit_datetime'], 0, 16));
+          if ($pre['visit_datetime'] === '' && !empty($r['start'])) $pre['visit_datetime'] = str_replace(' ', 'T', substr((string)$r['start'], 0, 16));
         }
       }
       $stmt->close();
     }
-  } catch (Throwable $e) {
-    // Fallback: try to at least prefill visit_datetime from start if possible
-    try {
-      $stmt = $mysqli->prepare("SELECT start FROM events WHERE id=? LIMIT 1");
-      if ($stmt) {
-        $stmt->bind_param('i', $event_id);
-        if ($stmt->execute()) {
-          $r = $stmt->get_result()->fetch_assoc();
-          if ($r && $pre['visit_datetime'] === '' && !empty($r['start'])) $pre['visit_datetime'] = (string)$r['start'];
-        }
-        $stmt->close();
-      }
-    } catch (Throwable $e2) {}
-  }
+  } catch (Throwable $e) {}
 }
 
 $errors = [];
@@ -76,13 +69,17 @@ $fieldErrors = [];
 $warnings = [];
 $duplicates = [];
 $ok = false;
+$draftSaved = false;
+$draftRows = fetch_user_report_drafts((int)user()['id'], 6);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_validate();
+  $intent = (string)($_POST['submit_intent'] ?? 'submit');
+  $draft_id = (int)($_POST['draft_id'] ?? 0);
 
   $doctor_name    = trim($_POST['doctor_name'] ?? '');
   $doctor_email   = trim($_POST['doctor_email'] ?? '');
-    if ($doctor_email === '') $doctor_email = 'NA';
+  if ($doctor_email === '') $doctor_email = 'NA';
   $purpose        = trim($_POST['purpose'] ?? '');
   $medicine_name  = trim($_POST['medicine_name'] ?? '');
   $hospital_name  = trim($_POST['hospital_name'] ?? '');
@@ -91,109 +88,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $remarks        = trim($_POST['remarks'] ?? '');
   $signature_data = trim($_POST['signature_data'] ?? '');
 
-  // Validate (lightweight; offline flow also validates in JS)
-  if ($doctor_name === '') { $errors[] = 'Doctor Name is required.'; $fieldErrors['doctor_name'] = 'Doctor name is required.'; }
-  if ($visit_datetime === '') { $errors[] = 'Visit Date/Time is required.'; $fieldErrors['visit_datetime'] = 'Visit date/time is required.'; }
+  $pre = compact('doctor_name','doctor_email','purpose','medicine_name','hospital_name','visit_datetime','summary','remarks');
 
-  $warnings = report_quality_checks([
-    'purpose' => $purpose,
-    'medicine_name' => $medicine_name,
-    'hospital_name' => $hospital_name,
-    'summary' => $summary,
-    'remarks' => $remarks,
-  ]);
-  $duplicates = find_potential_duplicate_reports((int)user()['id'], $doctor_name, $visit_datetime);
-
-  $attachment_path = null;
-
-  if (!$errors) {
-    // Handle attachment (optional)
-    if (!empty($_FILES['attachment']['name']) && is_uploaded_file($_FILES['attachment']['tmp_name'])) {
-      $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-      $allowed = ['pdf','jpg','jpeg','png'];
-
-      if (!in_array($ext, $allowed, true)) {
-        $errors[] = 'Invalid attachment type. Allowed: PDF/JPG/PNG.';
-      } else {
-        $dir = ATTACH_DIR;
-        if (!is_dir($dir)) @mkdir($dir, 0775, true);
-
-        $fname = 'att_' . (int)user()['id'] . '_' . time() . '.' . $ext;
-        $dest = $dir . '/' . $fname;
-
-        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $dest)) {
-          $attachment_path = 'uploads/attachments/' . $fname;
-        } else {
-          $errors[] = 'Failed to upload attachment.';
-        }
-      }
+  if ($intent === 'save_draft') {
+    $savedId = save_report_draft((int)user()['id'], report_draft_payload_from_request($_POST), $draft_id > 0 ? $draft_id : 0, null);
+    if ($savedId > 0) {
+      $draftSaved = true;
+      $draft_id = $savedId;
+      $draftRows = fetch_user_report_drafts((int)user()['id'], 6);
+      log_audit('report_draft_saved', 'report_draft', $savedId, 'Report draft saved');
+    } else {
+      $errors[] = 'Failed to save draft.';
     }
+  } else {
+    if ($doctor_name === '') { $errors[] = 'Doctor Name is required.'; $fieldErrors['doctor_name'] = 'Doctor name is required.'; }
+    if ($visit_datetime === '') { $errors[] = 'Visit Date/Time is required.'; $fieldErrors['visit_datetime'] = 'Visit date/time is required.'; }
 
-    // Save signature if present (base64 PNG)
-    $signature_path = null;
-    if ($signature_data && str_starts_with($signature_data, 'data:image')) {
-      $dir = SIGNATURE_DIR;
-      if (!is_dir($dir)) @mkdir($dir, 0775, true);
-
-      $sigName = 'sig_' . (int)user()['id'] . '_' . time() . '.png';
-      $sigDest = $dir . '/' . $sigName;
-
-      // Decode base64
-      $parts = explode(',', $signature_data, 2);
-      if (count($parts) === 2) {
-        $bin = base64_decode($parts[1]);
-        if ($bin !== false && file_put_contents($sigDest, $bin) !== false) {
-          $signature_path = 'uploads/signatures/' . $sigName;
-        }
-      }
-    }
-
-    // Insert report (backward-compatible: only writes columns that exist in your DB)
-    $uid = (int)user()['id'];
-    $rid = db_safe_insert('reports', [
-      'user_id' => $uid,
-      'doctor_name' => $doctor_name,
-      'doctor_email' => $doctor_email,
+    $warnings = report_quality_checks([
       'purpose' => $purpose,
       'medicine_name' => $medicine_name,
       'hospital_name' => $hospital_name,
-      'visit_datetime' => $visit_datetime,
       'summary' => $summary,
       'remarks' => $remarks,
-      'signature_path' => $signature_path,
-      'attachment_path' => $attachment_path,
-      'status' => 'pending',
-      'created_at' => date('Y-m-d H:i:s'),
     ]);
+    $duplicates = find_potential_duplicate_reports((int)user()['id'], $doctor_name, $visit_datetime);
 
-    if ($rid > 0) {
-      log_audit('report_created', 'report', $rid, 'Report submitted');
-      add_report_status_history($rid, null, 'pending', 'Initial submission');
-      $notifyIds = notification_recipient_ids_for_report_owner($uid);
-      if ($notifyIds) {
-        notify_many(
-          $notifyIds,
-          'New report submitted',
-          'A new meeting report from ' . ((string)(user()['name'] ?? 'a representative')) . ' is waiting for review.',
-          'report_submitted',
-          'report',
-          $rid,
-          url('reports/report_view.php?id=' . $rid),
-          $uid
-        );
+    $attachment_path = null;
+    if (!$errors) {
+      if (!empty($_FILES['attachment']['name']) && is_uploaded_file($_FILES['attachment']['tmp_name'])) {
+        $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
+        $allowed = ['pdf','jpg','jpeg','png'];
+        if (!in_array($ext, $allowed, true)) {
+          $errors[] = 'Invalid attachment type. Allowed: PDF/JPG/PNG.';
+        } else {
+          $dir = __DIR__ . '/../../uploads/attachments';
+          if (!is_dir($dir)) @mkdir($dir, 0775, true);
+          $fname = 'att_' . (int)user()['id'] . '_' . time() . '.' . $ext;
+          $dest = $dir . '/' . $fname;
+          if (move_uploaded_file($_FILES['attachment']['tmp_name'], $dest)) {
+            $attachment_path = 'uploads/attachments/' . $fname;
+          } else {
+            $errors[] = 'Failed to upload attachment.';
+          }
+        }
       }
-      $ok = true;
-    } else {
-      // last fallback for very old schemas
-      $rid2 = db_safe_insert('reports', [
+
+      $signature_path = null;
+      if ($signature_data && str_starts_with($signature_data, 'data:image')) {
+        $dir = __DIR__ . '/../../uploads/signatures';
+        if (!is_dir($dir)) @mkdir($dir, 0775, true);
+        $sigName = 'sig_' . (int)user()['id'] . '_' . time() . '.png';
+        $sigDest = $dir . '/' . $sigName;
+        $parts = explode(',', $signature_data, 2);
+        if (count($parts) === 2) {
+          $bin = base64_decode($parts[1]);
+          if ($bin !== false && file_put_contents($sigDest, $bin) !== false) {
+            $signature_path = 'uploads/signatures/' . $sigName;
+          }
+        }
+      }
+
+      $uid = (int)user()['id'];
+      $rid = db_safe_insert('reports', [
         'user_id' => $uid,
         'doctor_name' => $doctor_name,
         'doctor_email' => $doctor_email,
+        'purpose' => $purpose,
+        'medicine_name' => $medicine_name,
+        'hospital_name' => $hospital_name,
         'visit_datetime' => $visit_datetime,
+        'summary' => $summary,
+        'remarks' => $remarks,
+        'signature_path' => $signature_path,
+        'attachment_path' => $attachment_path,
+        'status' => 'pending',
         'created_at' => date('Y-m-d H:i:s'),
       ]);
-      if ($rid2 > 0) $ok = true;
-      else $errors[] = 'Failed to save report.';
+
+      if ($rid > 0) {
+        log_audit('report_created', 'report', $rid, 'Report submitted');
+        add_report_status_history($rid, null, 'pending', 'Initial submission');
+        if ($draft_id > 0) delete_report_draft($draft_id, $uid);
+        $notifyIds = notification_recipient_ids_for_report_owner($uid);
+        if ($notifyIds) {
+          notify_many($notifyIds, 'New report submitted', 'A new meeting report from ' . ((string)(user()['name'] ?? 'a representative')) . ' is waiting for review.', 'report_submitted', 'report', $rid, url('reports/report_view.php?id=' . $rid), $uid);
+        }
+        header('Location: ' . url('reports/report_view.php?id=' . $rid));
+        exit;
+      } else {
+        $errors[] = 'Failed to save report.';
+      }
     }
   }
 }
@@ -201,11 +185,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $title = 'Add Report';
 include __DIR__.'/../header.php';
 ?>
+<div class="crm-hero ui-hero">
+  <div><h2>Add Meeting Report</h2><div class="subtle">Create a full submission or save work as a draft for later.</div></div>
+  <div class="actions-inline"><a class="btn" href="<?= e(url('reports/reports.php')) ?>">Back to Reports</a></div>
+</div>
+<div class="summary-grid summary-grid-dashboard">
+  <?php ui_stat_card('My Drafts', count($draftRows), 'Saved personal drafts'); ?>
+  <?php ui_stat_card('Mode', $draftLoaded ? 'Draft Resume' : 'New Report', $draftLoaded ? 'Editing draft #'.(int)$draftLoaded['id'] : 'Fresh submission'); ?>
+</div>
 <div class="card">
-  <h2 class="titlecase">Add Meeting Report</h2>
-
-  <?php form_messages($errors, $warnings, $ok ? 'Report submitted.' : ''); ?>
-
+  <?php form_messages($errors, $warnings, $draftSaved ? 'Draft saved.' : ''); ?>
   <?php if ($duplicates): ?>
     <div class="alert warning">
       <strong>Possible duplicate reports found</strong>
@@ -215,8 +204,23 @@ include __DIR__.'/../header.php';
     </div>
   <?php endif; ?>
 
+  <?php if ($draftRows): ?>
+  <div class="draft-strip">
+    <div class="section-title">Recent Drafts</div>
+    <div class="draft-chip-wrap">
+      <?php foreach ($draftRows as $draft): ?>
+        <a class="draft-chip" href="<?= e(url('reports/report_add.php?draft_id='.(int)$draft['id'])) ?>">
+          <strong><?= e($draft['doctor_name'] ?: 'Untitled Draft') ?></strong>
+          <span><?= e(!empty($draft['updated_at']) ? date('M d, Y H:i', strtotime((string)$draft['updated_at'])) : 'Recently updated') ?></span>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <form method="post" class="form crm-form" id="reportForm" enctype="multipart/form-data">
     <?php csrf_input(); ?>
+    <input type="hidden" name="draft_id" value="<?= (int)$draft_id ?>">
 
     <div class="grid two">
       <?php render_text_input('Doctor Name', 'doctor_name', (string)$pre['doctor_name'], ['required'=>true], $fieldErrors); ?>
@@ -236,125 +240,73 @@ include __DIR__.'/../header.php';
     </label>
 
     <div class="signature-block form-panel">
-      <div class="sig-header">
-        <h3>Doctor Signature</h3>
-        <div class="sig-actions">
-          <button class="btn tiny" id="clearSig">Clear</button>
-        </div>
-      </div>
-
-      <canvas id="sigPad" width="600" height="200" class="sig-canvas"></canvas>
+      <div class="sig-header"><h3>Doctor Signature</h3><button class="btn tiny" type="button" id="clearSig">Clear</button></div>
+      <canvas id="sigPad" width="800" height="220" class="signature-pad"></canvas>
       <input type="hidden" name="signature_data" id="signature_data">
+      <small class="field-hint">Optional: capture a quick signature before final submission.</small>
     </div>
 
-    <div class="actions form-actions">
-      <button class="btn primary" type="submit">Save Report</button>
+    <div class="form-actions actions-inline">
+      <button class="btn" type="submit" name="submit_intent" value="save_draft">Save Draft</button>
+      <button class="btn primary" type="submit" name="submit_intent" value="submit">Submit Report</button>
     </div>
   </form>
 </div>
-
 <script>
 (function(){
-  function initSignaturePad(){
-    const canvas = document.getElementById('sigPad');
-    const form   = document.getElementById('reportForm');
-    const hidden = document.getElementById('signature_data');
-    const clearB = document.getElementById('clearSig');
-    if (!canvas || !form || !hidden) return;
-
-    // Prevent tablet zoom/scroll gestures while signing
-    canvas.style.touchAction = 'none';
-    const stopTouch = (e) => { e.preventDefault(); };
-    canvas.addEventListener('touchstart', stopTouch, { passive:false });
-    canvas.addEventListener('touchmove',  stopTouch, { passive:false });
-    canvas.addEventListener('touchend',   stopTouch, { passive:false });
-    canvas.addEventListener('touchcancel',stopTouch, { passive:false });
-
-    // Decide which pad implementation we are using
-    const usingSignaturePad = !!window.SignaturePad; // CDN/online
-    let pad = null;
-
-    function resizeCanvas(){
-      const ratio = Math.max(window.devicePixelRatio || 1, 1);
-      const rect  = canvas.getBoundingClientRect();
-      const cssW  = Math.max(1, rect.width);
-      const cssH  = Math.max(1, rect.height);
-
-      // Set internal pixel size to match CSS size * DPR
-      canvas.width  = Math.round(cssW * ratio);
-      canvas.height = Math.round(cssH * ratio);
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // IMPORTANT:
-      // - SignaturePad needs ctx scaled so its points (CSS px) match drawing space
-      // - SimpleSignaturePad already maps points into canvas pixels, so DO NOT scale
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      if (usingSignaturePad) {
-        ctx.scale(ratio, ratio);
-      }
-    }
-
-    resizeCanvas();
-
-    // Init pad (SignaturePad online, fallback offline)
-    if (usingSignaturePad) {
-      pad = new SignaturePad(canvas, { minWidth: 1, maxWidth: 2 });
-    } else if (window.SimpleSignaturePad) {
-      pad = window.SimpleSignaturePad(canvas);
-    }
-
-    // If CDN blocked but fallback loads after, retry once on load
-    if (!pad) {
-      window.addEventListener('load', () => {
-        resizeCanvas();
-        if (!pad && window.SimpleSignaturePad) pad = window.SimpleSignaturePad(canvas);
-      }, { once:true });
-    }
-
-    function capture(){
-      if (!pad) { hidden.value = ''; return; }
+  const form = document.getElementById('reportForm');
+  const draftKey = 'medsales_report_draft_add';
+  const fields = ['doctor_name','doctor_email','purpose','medicine_name','hospital_name','visit_datetime','summary','remarks'];
+  if (form) {
+    if (!form.querySelector('[name="draft_id"]').value) {
       try {
-        if (pad.isEmpty && pad.isEmpty()) { hidden.value = ''; return; }
-        hidden.value = (pad.toDataURL ? pad.toDataURL('image/png') : canvas.toDataURL('image/png'));
-      } catch (e) {
-        hidden.value = '';
-      }
+        const saved = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        fields.forEach(name => {
+          const el = form.querySelector('[name="'+name+'"]');
+          if (el && !el.value && typeof saved[name] === 'string') el.value = saved[name];
+        });
+      } catch(e){}
     }
-
-    if (clearB) clearB.addEventListener('click', (e)=>{
-      e.preventDefault();
-      if (pad && pad.clear) pad.clear();
-      hidden.value = '';
+    const saveLocal = () => {
+      const payload = {};
+      fields.forEach(name => {
+        const el = form.querySelector('[name="'+name+'"]');
+        if (el) payload[name] = el.value || '';
+      });
+      try { localStorage.setItem(draftKey, JSON.stringify(payload)); } catch(e){}
+    };
+    fields.forEach(name => {
+      const el = form.querySelector('[name="'+name+'"]');
+      if (el) el.addEventListener('input', saveLocal);
     });
-
-    // On rotate/resize: resizing resets the canvas, so clear to avoid offset/zoom issues
-    function handleResize(){
-      const hadInk = pad && pad.isEmpty && !pad.isEmpty();
-      resizeCanvas();
-      if (pad && pad.clear && hadInk) {
-        pad.clear();
-        hidden.value = '';
+    form.addEventListener('submit', function(){
+      const intent = document.activeElement && document.activeElement.value;
+      if (intent === 'submit') {
+        try { localStorage.removeItem(draftKey); } catch(e){}
+      } else {
+        saveLocal();
       }
-    }
-
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-
-    form.addEventListener('submit', ()=>capture());
-
-    // Used by offline queue code in app.js
-    window.__captureReportSignature = capture;
+    });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSignaturePad);
-  } else {
-    initSignaturePad();
+  const canvas = document.getElementById('sigPad');
+  const hidden = document.getElementById('signature_data');
+  const clearBtn = document.getElementById('clearSig');
+  if (canvas && hidden) {
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+    const point = (ev) => {
+      const rect = canvas.getBoundingClientRect();
+      const t = ev.touches ? ev.touches[0] : ev;
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    };
+    const start = (ev) => { drawing = true; const p = point(ev); ctx.beginPath(); ctx.moveTo(p.x,p.y); ev.preventDefault(); };
+    const move = (ev) => { if (!drawing) return; const p = point(ev); ctx.lineWidth = 2; ctx.lineCap='round'; ctx.strokeStyle='#111827'; ctx.lineTo(p.x,p.y); ctx.stroke(); hidden.value = canvas.toDataURL('image/png'); ev.preventDefault(); };
+    const end = () => { drawing = false; };
+    canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start, {passive:false}); canvas.addEventListener('touchmove', move, {passive:false}); window.addEventListener('touchend', end);
+    if (clearBtn) clearBtn.addEventListener('click', function(){ ctx.clearRect(0,0,canvas.width,canvas.height); hidden.value=''; });
   }
 })();
 </script>
-
-
 <?php include __DIR__.'/../footer.php'; ?>

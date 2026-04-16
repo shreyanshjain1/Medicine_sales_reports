@@ -148,6 +148,6 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## API conventions
-- JSON endpoints now return a consistent envelope: `success`, `message`, `data`, and `errors`.
-- Authenticated API routes should use shared API helpers for method checks, login checks, and permission errors.
+## Latest workflow upgrades
+- **Report Drafts:** reps can save draft reports, resume them later, and keep local autosave protection while filling forms.
+- **Structured Review Comments:** managers can leave reusable comment types like approval reason, change request, and follow-up notes directly in the report review workspace.

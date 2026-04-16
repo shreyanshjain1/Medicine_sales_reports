@@ -5,9 +5,6 @@ session_start();
 $components = __DIR__ . '/app/components/form_components.php';
 if (is_file($components)) require_once $components;
 
-$apiHelpers = __DIR__ . '/app/helpers/api_helpers.php';
-if (is_file($apiHelpers)) require_once $apiHelpers;
-
 $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($mysqli->connect_error) die('DB Connection failed: ' . $mysqli->connect_error);
 $mysqli->set_charset('utf8mb4');
@@ -434,6 +431,163 @@ function fetch_reviewer_backlog(int $limit=10): array {
     LIMIT {$limit}";
   $rows=[]; if($res=$mysqli->query($sql)){ while($row=$res->fetch_assoc()) $rows[]=$row; }
   return $rows;
+}
+
+
+
+if (!function_exists('ensure_report_workflow_tables')) {
+function ensure_report_workflow_tables(): void {
+  if (!empty($_SESSION['_report_workflow_schema_v13'])) return;
+  $_SESSION['_report_workflow_schema_v13'] = 1;
+  _try_sql("CREATE TABLE IF NOT EXISTS report_drafts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    source_report_id INT NULL,
+    doctor_name VARCHAR(120) NULL,
+    doctor_email VARCHAR(150) NULL,
+    purpose VARCHAR(200) NULL,
+    medicine_name VARCHAR(200) NULL,
+    hospital_name VARCHAR(200) NULL,
+    visit_datetime DATETIME NULL,
+    summary TEXT NULL,
+    remarks TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_report_drafts_user (user_id),
+    KEY idx_report_drafts_source (source_report_id),
+    CONSTRAINT fk_report_drafts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  _try_sql("CREATE TABLE IF NOT EXISTS report_review_comments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    actor_user_id INT NULL,
+    comment_type VARCHAR(40) NOT NULL DEFAULT 'general',
+    comment_text TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_rrc_report (report_id),
+    KEY idx_rrc_actor (actor_user_id),
+    KEY idx_rrc_created (created_at),
+    CONSTRAINT fk_rrc_report FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rrc_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+ensure_report_workflow_tables();
+}
+
+if (!function_exists('report_draft_payload_from_request')) {
+function report_draft_payload_from_request(array $src): array {
+  $visit = trim((string)($src['visit_datetime'] ?? ''));
+  if ($visit !== '' && strlen($visit) === 16) $visit .= ':00';
+  return [
+    'doctor_name' => trim((string)($src['doctor_name'] ?? '')),
+    'doctor_email' => trim((string)($src['doctor_email'] ?? '')),
+    'purpose' => trim((string)($src['purpose'] ?? '')),
+    'medicine_name' => trim((string)($src['medicine_name'] ?? '')),
+    'hospital_name' => trim((string)($src['hospital_name'] ?? '')),
+    'visit_datetime' => $visit,
+    'summary' => trim((string)($src['summary'] ?? '')),
+    'remarks' => trim((string)($src['remarks'] ?? '')),
+  ];
+}
+}
+
+if (!function_exists('save_report_draft')) {
+function save_report_draft(int $userId, array $payload, int $draftId = 0, ?int $sourceReportId = null): int {
+  global $mysqli;
+  if ($userId <= 0) return 0;
+  $payload = array_merge([
+    'doctor_name'=>'','doctor_email'=>'','purpose'=>'','medicine_name'=>'','hospital_name'=>'',
+    'visit_datetime'=>null,'summary'=>'','remarks'=>''
+  ], $payload);
+  $visit = trim((string)$payload['visit_datetime']);
+  $visit = $visit !== '' ? $visit : null;
+  if ($draftId > 0) {
+    $stmt = $mysqli->prepare("UPDATE report_drafts SET doctor_name=?, doctor_email=?, purpose=?, medicine_name=?, hospital_name=?, visit_datetime=?, summary=?, remarks=?, source_report_id=? WHERE id=? AND user_id=?");
+    if (!$stmt) return 0;
+    $stmt->bind_param('sssssssiiii', $payload['doctor_name'], $payload['doctor_email'], $payload['purpose'], $payload['medicine_name'], $payload['hospital_name'], $visit, $payload['summary'], $payload['remarks'], $sourceReportId, $draftId, $userId);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok ? $draftId : 0;
+  }
+  $stmt = $mysqli->prepare("INSERT INTO report_drafts (user_id, source_report_id, doctor_name, doctor_email, purpose, medicine_name, hospital_name, visit_datetime, summary, remarks) VALUES (?,?,?,?,?,?,?,?,?,?)");
+  if (!$stmt) return 0;
+  $stmt->bind_param('iissssssss', $userId, $sourceReportId, $payload['doctor_name'], $payload['doctor_email'], $payload['purpose'], $payload['medicine_name'], $payload['hospital_name'], $visit, $payload['summary'], $payload['remarks']);
+  $ok = $stmt->execute();
+  $id = $ok ? (int)$stmt->insert_id : 0;
+  $stmt->close();
+  return $id;
+}
+}
+
+if (!function_exists('fetch_report_draft')) {
+function fetch_report_draft(int $draftId, int $userId): ?array {
+  global $mysqli;
+  if ($draftId <= 0 || $userId <= 0) return null;
+  $stmt = $mysqli->prepare("SELECT * FROM report_drafts WHERE id=? AND user_id=? LIMIT 1");
+  if (!$stmt) return null;
+  $stmt->bind_param('ii', $draftId, $userId);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc() ?: null;
+  $stmt->close();
+  return $row;
+}
+}
+
+if (!function_exists('fetch_user_report_drafts')) {
+function fetch_user_report_drafts(int $userId, int $limit = 8): array {
+  global $mysqli;
+  $userId = (int)$userId; $limit = max(1, min(20, $limit));
+  if ($userId <= 0) return [];
+  $stmt = $mysqli->prepare("SELECT * FROM report_drafts WHERE user_id=? ORDER BY updated_at DESC, id DESC LIMIT {$limit}");
+  if (!$stmt) return [];
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+  $stmt->close();
+  return $rows ?: [];
+}
+}
+
+if (!function_exists('delete_report_draft')) {
+function delete_report_draft(int $draftId, int $userId): bool {
+  global $mysqli;
+  $stmt = $mysqli->prepare("DELETE FROM report_drafts WHERE id=? AND user_id=?");
+  if (!$stmt) return false;
+  $stmt->bind_param('ii', $draftId, $userId);
+  $ok = $stmt->execute();
+  $stmt->close();
+  return $ok;
+}
+}
+
+if (!function_exists('fetch_review_comments')) {
+function fetch_review_comments(int $reportId): array {
+  global $mysqli;
+  $stmt = $mysqli->prepare("SELECT c.*, u.name AS actor_name FROM report_review_comments c LEFT JOIN users u ON u.id=c.actor_user_id WHERE c.report_id=? ORDER BY c.created_at DESC, c.id DESC");
+  if (!$stmt) return [];
+  $stmt->bind_param('i', $reportId);
+  $stmt->execute();
+  $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+  $stmt->close();
+  return $rows ?: [];
+}
+}
+
+if (!function_exists('add_review_comment')) {
+function add_review_comment(int $reportId, string $type, string $text, ?int $actorUserId = null): bool {
+  global $mysqli;
+  $text = trim($text);
+  if ($reportId <= 0 || $text === '') return false;
+  $allowed = ['general','approval_reason','change_request','follow_up'];
+  if (!in_array($type, $allowed, true)) $type = 'general';
+  if ($actorUserId === null) $actorUserId = (int)(user()['id'] ?? 0) ?: null;
+  $stmt = $mysqli->prepare("INSERT INTO report_review_comments (report_id, actor_user_id, comment_type, comment_text) VALUES (?,?,?,?)");
+  if (!$stmt) return false;
+  $stmt->bind_param('iiss', $reportId, $actorUserId, $type, $text);
+  $ok = $stmt->execute();
+  $stmt->close();
+  return $ok;
+}
 }
 
 ?>
