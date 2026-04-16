@@ -1,12 +1,8 @@
 <?php
-// public/event_add.php — add task (DB-backed) with backward-compatible insert
 require_once __DIR__ . '/../../init.php';
 require_login();
 csrf_verify();
 
-/**
- * Get existing columns for a table (cached).
- */
 function table_columns(string $table): array {
   static $cache = [];
   $key = strtolower($table);
@@ -23,52 +19,52 @@ function table_columns(string $table): array {
   return $cache[$key] = $cols;
 }
 
-/**
- * Insert into $table only using columns that exist.
- * $data is [col => value]. Returns inserted id or 0.
- */
 function safe_insert(string $table, array $data): int {
   global $mysqli;
   $existing = array_flip(table_columns($table));
   if (!$existing) return 0;
-
   $cols = [];
   $vals = [];
   $types = '';
-
   foreach ($data as $col => $val) {
     if (!isset($existing[$col])) continue;
     $cols[] = $col;
     $vals[] = $val;
-    // Best-effort typing: ints for numeric-ish, else string
-    if (is_int($val)) $types .= 'i';
-    else $types .= 's';
+    $types .= is_int($val) ? 'i' : 's';
   }
-
   if (!$cols) return 0;
-  $placeholders = implode(',', array_fill(0, count($cols), '?'));
-  $sql = "INSERT INTO {$table} (" . implode(',', $cols) . ") VALUES ({$placeholders})";
+  $sql = "INSERT INTO {$table} (" . implode(',', $cols) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")";
   $stmt = $mysqli->prepare($sql);
-  if (!$stmt) {
-    error_log("safe_insert prepare failed for {$table}: " . $mysqli->error);
-    return 0;
-  }
-
-  // bind_param requires references
+  if (!$stmt) return 0;
   $bind = [$types];
-  for ($i = 0; $i < count($vals); $i++) {
-    $bind[] = &$vals[$i];
-  }
+  foreach ($vals as $i => $v) $bind[] = &$vals[$i];
   @call_user_func_array([$stmt, 'bind_param'], $bind);
   $ok = $stmt->execute();
-  if (!$ok) {
-    error_log("safe_insert execute failed for {$table}: " . $stmt->error);
-    $stmt->close();
-    return 0;
-  }
-  $id = (int)$stmt->insert_id;
+  $id = $ok ? (int)$stmt->insert_id : 0;
   $stmt->close();
   return $id;
+}
+
+function recurring_dates(string $pattern, string $start, ?string $until): array {
+  if ($pattern === 'none' || $start === '') return [];
+  $dates = [];
+  $base = strtotime($start);
+  if (!$base) return [];
+  $untilTs = $until ? strtotime($until . ' 23:59:59') : strtotime('+30 days', $base);
+  $cursor = $base;
+  $count = 0;
+  while ($count < 12) {
+    $cursor = match ($pattern) {
+      'daily' => strtotime('+1 day', $cursor),
+      'weekly' => strtotime('+1 week', $cursor),
+      'monthly' => strtotime('+1 month', $cursor),
+      default => 0,
+    };
+    if (!$cursor || $cursor > $untilTs) break;
+    $dates[] = date('Y-m-d H:i:s', $cursor);
+    $count++;
+  }
+  return $dates;
 }
 
 $title = trim((string)post('title', ''));
@@ -77,20 +73,18 @@ $doctor_id = (int)(post('doctor_id', '') ?: 0);
 $start = trim((string)post('start', ''));
 $end   = trim((string)post('end', ''));
 $all   = post('all_day') ? 1 : 0;
-
-// Extra task fields (optional)
 $purpose = trim((string)post('purpose', ''));
 $medicine_name = trim((string)post('medicine_name', ''));
 $hospital_name = trim((string)post('hospital_name', ''));
 $visit_datetime = trim((string)post('visit_datetime', ''));
 $summary = trim((string)post('summary', ''));
 $remarks = trim((string)post('remarks', ''));
-
-// Multi-rep attendees (optional)
 $attendees = post('attendees', []);
+$status = trim((string)post('status', 'planned')) ?: 'planned';
+$recurrence_pattern = trim((string)post('recurrence_pattern', 'none')) ?: 'none';
+$recurrence_until = trim((string)post('recurrence_until', ''));
 if (!is_array($attendees)) $attendees = [];
 
-// If doctor selected but no title, auto-title
 if ($doctor_id && $title === '') {
   $stmt = $mysqli->prepare("SELECT dr_name, hospital_address FROM doctors_masterlist WHERE id=?");
   if ($stmt) {
@@ -107,17 +101,10 @@ if ($doctor_id && $title === '') {
 
 if ($title === '') $title = 'Task';
 if ($visit_datetime === '' && $start !== '') $visit_datetime = $start;
-
-// Start is required for calendar; if missing just return to dashboard
-if ($start === '') {
-  header('Location: ' . url('dashboard.php'));
-  exit;
-}
+if ($start === '') { header('Location: ' . url('dashboard.php')); exit; }
 
 $uid = (int)(user()['id'] ?? 0);
-
-// Backward-compatible insert: only write columns that exist in the current DB.
-$newId = safe_insert('events', [
+$payload = [
   'user_id' => $uid,
   'title' => $title,
   'city' => $city,
@@ -128,13 +115,15 @@ $newId = safe_insert('events', [
   'visit_datetime' => $visit_datetime,
   'summary' => $summary,
   'remarks' => $remarks,
+  'status' => $status,
+  'recurrence_pattern' => $recurrence_pattern,
+  'recurrence_until' => ($recurrence_until === '' ? null : $recurrence_until),
   'start' => $start,
   'end' => ($end === '' ? null : $end),
   'all_day' => $all,
-]);
-
+];
+$newId = safe_insert('events', $payload);
 if ($newId <= 0) {
-  // As a last fallback, attempt minimal insert that most older schemas have.
   safe_insert('events', [
     'user_id' => $uid,
     'title' => $title,
@@ -144,27 +133,62 @@ if ($newId <= 0) {
   ]);
 }
 
-// Save attendees (best-effort, never block task creation)
-if ($newId > 0 && $attendees) {
-  // Create table if not exists (safe on older installs)
-  $mysqli->query("CREATE TABLE IF NOT EXISTS event_attendees (
-    event_id INT NOT NULL,
-    user_id INT NOT NULL,
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY(event_id,user_id),
-    INDEX(user_id)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+$mysqli->query("CREATE TABLE IF NOT EXISTS event_attendees (
+  event_id INT NOT NULL,
+  user_id INT NOT NULL,
+  added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(event_id,user_id),
+  INDEX(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+if ($newId > 0 && $attendees) {
   $stmtA = $mysqli->prepare("INSERT IGNORE INTO event_attendees (event_id,user_id) VALUES (?,?)");
   if ($stmtA) {
     foreach ($attendees as $aidRaw) {
       $aid = (int)$aidRaw;
-      if ($aid <= 0) continue;
-      if ($aid === $uid) continue;
+      if ($aid <= 0 || $aid === $uid) continue;
       $stmtA->bind_param('ii', $newId, $aid);
       @$stmtA->execute();
     }
     $stmtA->close();
+  }
+}
+
+if ($newId > 0 && $recurrence_pattern !== 'none') {
+  $occurrences = recurring_dates($recurrence_pattern, $start, $recurrence_until ?: null);
+  foreach ($occurrences as $occStart) {
+    $occEnd = $end !== '' ? date('Y-m-d H:i:s', strtotime($occStart) + max(0, strtotime($end) - strtotime($start))) : null;
+    $occVisit = $visit_datetime !== '' ? date('Y-m-d H:i:s', strtotime($occStart) + max(0, strtotime($visit_datetime) - strtotime($start))) : $occStart;
+    $childId = safe_insert('events', [
+      'user_id' => $uid,
+      'parent_event_id' => $newId,
+      'title' => $title,
+      'city' => $city,
+      'doctor_id' => $doctor_id,
+      'purpose' => $purpose,
+      'medicine_name' => $medicine_name,
+      'hospital_name' => $hospital_name,
+      'visit_datetime' => $occVisit,
+      'summary' => $summary,
+      'remarks' => $remarks,
+      'status' => 'planned',
+      'recurrence_pattern' => 'none',
+      'start' => $occStart,
+      'end' => $occEnd,
+      'all_day' => $all,
+    ]);
+    if ($childId > 0 && $attendees) {
+      $stmtA = $mysqli->prepare("INSERT IGNORE INTO event_attendees (event_id,user_id) VALUES (?,?)");
+      if ($stmtA) {
+        foreach ($attendees as $aidRaw) {
+          $aid = (int)$aidRaw;
+          if ($aid <= 0 || $aid === $uid) continue;
+          $stmtA->bind_param('ii', $childId, $aid);
+          @$stmtA->execute();
+        }
+        $stmtA->close();
+      }
+    }
   }
 }
 
