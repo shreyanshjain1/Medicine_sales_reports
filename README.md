@@ -148,6 +148,8 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## Latest workflow upgrades
-- **Report Drafts:** reps can save draft reports, resume them later, and keep local autosave protection while filling forms.
-- **Structured Review Comments:** managers can leave reusable comment types like approval reason, change request, and follow-up notes directly in the report review workspace.
+## PR 25 additions
+
+- Event-specific notification preferences in **Profile** for review updates, task assignments, security alerts, and digest emails.
+- Saved **Digest Presets** in the manager digest builder so common weekly/monthly filter sets can be reused.
+- Database updates for new user notification preference columns and preset persistence.

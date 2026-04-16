@@ -435,159 +435,130 @@ function fetch_reviewer_backlog(int $limit=10): array {
 
 
 
-if (!function_exists('ensure_report_workflow_tables')) {
-function ensure_report_workflow_tables(): void {
-  if (!empty($_SESSION['_report_workflow_schema_v13'])) return;
-  $_SESSION['_report_workflow_schema_v13'] = 1;
-  _try_sql("CREATE TABLE IF NOT EXISTS report_drafts (
+function ensure_notification_preference_schema(): void {
+  if (!empty($_SESSION['_notification_pref_schema_v25'])) return;
+  $_SESSION['_notification_pref_schema_v25'] = 1;
+
+  if (_col_exists('users','id')) {
+    if (!_col_exists('users','notify_review_updates')) _try_sql("ALTER TABLE users ADD COLUMN notify_review_updates TINYINT(1) NOT NULL DEFAULT 1 AFTER wants_email_notifications");
+    if (!_col_exists('users','notify_task_assignments')) _try_sql("ALTER TABLE users ADD COLUMN notify_task_assignments TINYINT(1) NOT NULL DEFAULT 1 AFTER notify_review_updates");
+    if (!_col_exists('users','notify_security_alerts')) _try_sql("ALTER TABLE users ADD COLUMN notify_security_alerts TINYINT(1) NOT NULL DEFAULT 1 AFTER notify_task_assignments");
+    if (!_col_exists('users','notify_digest_emails')) _try_sql("ALTER TABLE users ADD COLUMN notify_digest_emails TINYINT(1) NOT NULL DEFAULT 0 AFTER notify_security_alerts");
+  }
+
+  _try_sql("CREATE TABLE IF NOT EXISTS manager_digest_presets (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
     user_id INT NOT NULL,
-    source_report_id INT NULL,
-    doctor_name VARCHAR(120) NULL,
-    doctor_email VARCHAR(150) NULL,
-    purpose VARCHAR(200) NULL,
-    medicine_name VARCHAR(200) NULL,
-    hospital_name VARCHAR(200) NULL,
-    visit_datetime DATETIME NULL,
-    summary TEXT NULL,
-    remarks TEXT NULL,
+    preset_payload TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    KEY idx_report_drafts_user (user_id),
-    KEY idx_report_drafts_source (source_report_id),
-    CONSTRAINT fk_report_drafts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-  _try_sql("CREATE TABLE IF NOT EXISTS report_review_comments (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    report_id INT NOT NULL,
-    actor_user_id INT NULL,
-    comment_type VARCHAR(40) NOT NULL DEFAULT 'general',
-    comment_text TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    KEY idx_rrc_report (report_id),
-    KEY idx_rrc_actor (actor_user_id),
-    KEY idx_rrc_created (created_at),
-    CONSTRAINT fk_rrc_report FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
-    CONSTRAINT fk_rrc_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+    KEY idx_digest_preset_user (user_id),
+    CONSTRAINT fk_digest_preset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
-ensure_report_workflow_tables();
+
+ensure_notification_preference_schema();
+
+function user_pref_enabled(?array $u, string $key, int $default=1): bool {
+  if (!$u) return (bool)$default;
+  return isset($u[$key]) ? (int)$u[$key] === 1 : (bool)$default;
 }
 
-if (!function_exists('report_draft_payload_from_request')) {
-function report_draft_payload_from_request(array $src): array {
-  $visit = trim((string)($src['visit_datetime'] ?? ''));
-  if ($visit !== '' && strlen($visit) === 16) $visit .= ':00';
-  return [
-    'doctor_name' => trim((string)($src['doctor_name'] ?? '')),
-    'doctor_email' => trim((string)($src['doctor_email'] ?? '')),
-    'purpose' => trim((string)($src['purpose'] ?? '')),
-    'medicine_name' => trim((string)($src['medicine_name'] ?? '')),
-    'hospital_name' => trim((string)($src['hospital_name'] ?? '')),
-    'visit_datetime' => $visit,
-    'summary' => trim((string)($src['summary'] ?? '')),
-    'remarks' => trim((string)($src['remarks'] ?? '')),
-  ];
-}
-}
-
-if (!function_exists('save_report_draft')) {
-function save_report_draft(int $userId, array $payload, int $draftId = 0, ?int $sourceReportId = null): int {
+function refresh_session_user_preferences(int $userId): void {
   global $mysqli;
-  if ($userId <= 0) return 0;
-  $payload = array_merge([
-    'doctor_name'=>'','doctor_email'=>'','purpose'=>'','medicine_name'=>'','hospital_name'=>'',
-    'visit_datetime'=>null,'summary'=>'','remarks'=>''
-  ], $payload);
-  $visit = trim((string)$payload['visit_datetime']);
-  $visit = $visit !== '' ? $visit : null;
-  if ($draftId > 0) {
-    $stmt = $mysqli->prepare("UPDATE report_drafts SET doctor_name=?, doctor_email=?, purpose=?, medicine_name=?, hospital_name=?, visit_datetime=?, summary=?, remarks=?, source_report_id=? WHERE id=? AND user_id=?");
-    if (!$stmt) return 0;
-    $stmt->bind_param('sssssssiiii', $payload['doctor_name'], $payload['doctor_email'], $payload['purpose'], $payload['medicine_name'], $payload['hospital_name'], $visit, $payload['summary'], $payload['remarks'], $sourceReportId, $draftId, $userId);
-    $ok = $stmt->execute();
-    $stmt->close();
-    return $ok ? $draftId : 0;
-  }
-  $stmt = $mysqli->prepare("INSERT INTO report_drafts (user_id, source_report_id, doctor_name, doctor_email, purpose, medicine_name, hospital_name, visit_datetime, summary, remarks) VALUES (?,?,?,?,?,?,?,?,?,?)");
-  if (!$stmt) return 0;
-  $stmt->bind_param('iissssssss', $userId, $sourceReportId, $payload['doctor_name'], $payload['doctor_email'], $payload['purpose'], $payload['medicine_name'], $payload['hospital_name'], $visit, $payload['summary'], $payload['remarks']);
-  $ok = $stmt->execute();
-  $id = $ok ? (int)$stmt->insert_id : 0;
+  if (empty($_SESSION['user']) || (int)($_SESSION['user']['id'] ?? 0) !== $userId) return;
+  $stmt = $mysqli->prepare("SELECT wants_email_notifications, notify_review_updates, notify_task_assignments, notify_security_alerts, notify_digest_emails FROM users WHERE id=? LIMIT 1");
+  if (!$stmt) return;
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc() ?: [];
   $stmt->close();
-  return $id;
-}
+  foreach (['wants_email_notifications','notify_review_updates','notify_task_assignments','notify_security_alerts','notify_digest_emails'] as $k) {
+    if (array_key_exists($k, $row)) $_SESSION['user'][$k] = (int)$row[$k];
+  }
 }
 
-if (!function_exists('fetch_report_draft')) {
-function fetch_report_draft(int $draftId, int $userId): ?array {
+function save_user_notification_preferences(int $userId, array $prefs): bool {
   global $mysqli;
-  if ($draftId <= 0 || $userId <= 0) return null;
-  $stmt = $mysqli->prepare("SELECT * FROM report_drafts WHERE id=? AND user_id=? LIMIT 1");
+  $payload = [
+    'wants_email_notifications' => !empty($prefs['wants_email_notifications']) ? 1 : 0,
+    'notify_review_updates' => !empty($prefs['notify_review_updates']) ? 1 : 0,
+    'notify_task_assignments' => !empty($prefs['notify_task_assignments']) ? 1 : 0,
+    'notify_security_alerts' => !empty($prefs['notify_security_alerts']) ? 1 : 0,
+    'notify_digest_emails' => !empty($prefs['notify_digest_emails']) ? 1 : 0,
+  ];
+  $stmt = $mysqli->prepare("UPDATE users SET wants_email_notifications=?, notify_review_updates=?, notify_task_assignments=?, notify_security_alerts=?, notify_digest_emails=? WHERE id=?");
+  if (!$stmt) return false;
+  $stmt->bind_param('iiiiii', $payload['wants_email_notifications'], $payload['notify_review_updates'], $payload['notify_task_assignments'], $payload['notify_security_alerts'], $payload['notify_digest_emails'], $userId);
+  $ok = $stmt->execute();
+  $stmt->close();
+  if ($ok) refresh_session_user_preferences($userId);
+  return $ok;
+}
+
+function digest_preset_payload(string $range, string $dateFrom, string $dateTo, int $employeeId, string $status): string {
+  return json_encode([
+    'range' => $range,
+    'date_from' => $dateFrom,
+    'date_to' => $dateTo,
+    'employee_id' => $employeeId,
+    'status' => $status,
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function fetch_digest_presets_for_user(int $userId): array {
+  global $mysqli;
+  $rows = [];
+  $stmt = $mysqli->prepare("SELECT id, name, preset_payload, created_at, updated_at FROM manager_digest_presets WHERE user_id=? ORDER BY updated_at DESC, id DESC");
+  if (!$stmt) return $rows;
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  while ($row = $res->fetch_assoc()) {
+    $row['preset'] = json_decode((string)($row['preset_payload'] ?? '{}'), true) ?: [];
+    $rows[] = $row;
+  }
+  $stmt->close();
+  return $rows;
+}
+
+function fetch_digest_preset_by_id(int $presetId, int $userId): ?array {
+  global $mysqli;
+  $stmt = $mysqli->prepare("SELECT id, name, preset_payload FROM manager_digest_presets WHERE id=? AND user_id=? LIMIT 1");
   if (!$stmt) return null;
-  $stmt->bind_param('ii', $draftId, $userId);
+  $stmt->bind_param('ii', $presetId, $userId);
   $stmt->execute();
   $row = $stmt->get_result()->fetch_assoc() ?: null;
   $stmt->close();
+  if ($row) $row['preset'] = json_decode((string)($row['preset_payload'] ?? '{}'), true) ?: [];
   return $row;
 }
-}
 
-if (!function_exists('fetch_user_report_drafts')) {
-function fetch_user_report_drafts(int $userId, int $limit = 8): array {
+function save_digest_preset(int $userId, string $name, string $payload, ?int $presetId=null): bool {
   global $mysqli;
-  $userId = (int)$userId; $limit = max(1, min(20, $limit));
-  if ($userId <= 0) return [];
-  $stmt = $mysqli->prepare("SELECT * FROM report_drafts WHERE user_id=? ORDER BY updated_at DESC, id DESC LIMIT {$limit}");
-  if (!$stmt) return [];
-  $stmt->bind_param('i', $userId);
-  $stmt->execute();
-  $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-  $stmt->close();
-  return $rows ?: [];
-}
-}
-
-if (!function_exists('delete_report_draft')) {
-function delete_report_draft(int $draftId, int $userId): bool {
-  global $mysqli;
-  $stmt = $mysqli->prepare("DELETE FROM report_drafts WHERE id=? AND user_id=?");
-  if (!$stmt) return false;
-  $stmt->bind_param('ii', $draftId, $userId);
+  if ($presetId && $presetId > 0) {
+    $stmt = $mysqli->prepare("UPDATE manager_digest_presets SET name=?, preset_payload=? WHERE id=? AND user_id=?");
+    if (!$stmt) return false;
+    $stmt->bind_param('ssii', $name, $payload, $presetId, $userId);
+  } else {
+    $stmt = $mysqli->prepare("INSERT INTO manager_digest_presets (name, user_id, preset_payload) VALUES (?,?,?)");
+    if (!$stmt) return false;
+    $stmt->bind_param('sis', $name, $userId, $payload);
+  }
   $ok = $stmt->execute();
   $stmt->close();
   return $ok;
 }
-}
 
-if (!function_exists('fetch_review_comments')) {
-function fetch_review_comments(int $reportId): array {
+function delete_digest_preset(int $presetId, int $userId): bool {
   global $mysqli;
-  $stmt = $mysqli->prepare("SELECT c.*, u.name AS actor_name FROM report_review_comments c LEFT JOIN users u ON u.id=c.actor_user_id WHERE c.report_id=? ORDER BY c.created_at DESC, c.id DESC");
-  if (!$stmt) return [];
-  $stmt->bind_param('i', $reportId);
-  $stmt->execute();
-  $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-  $stmt->close();
-  return $rows ?: [];
-}
-}
-
-if (!function_exists('add_review_comment')) {
-function add_review_comment(int $reportId, string $type, string $text, ?int $actorUserId = null): bool {
-  global $mysqli;
-  $text = trim($text);
-  if ($reportId <= 0 || $text === '') return false;
-  $allowed = ['general','approval_reason','change_request','follow_up'];
-  if (!in_array($type, $allowed, true)) $type = 'general';
-  if ($actorUserId === null) $actorUserId = (int)(user()['id'] ?? 0) ?: null;
-  $stmt = $mysqli->prepare("INSERT INTO report_review_comments (report_id, actor_user_id, comment_type, comment_text) VALUES (?,?,?,?)");
+  $stmt = $mysqli->prepare("DELETE FROM manager_digest_presets WHERE id=? AND user_id=?");
   if (!$stmt) return false;
-  $stmt->bind_param('iiss', $reportId, $actorUserId, $type, $text);
+  $stmt->bind_param('ii', $presetId, $userId);
   $ok = $stmt->execute();
   $stmt->close();
   return $ok;
-}
 }
 
 ?>

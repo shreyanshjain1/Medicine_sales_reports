@@ -3,6 +3,55 @@ require_once __DIR__.'/../../init.php';
 require_manager();
 
 $title = 'Digest Builder';
+$me = user();
+$presetMessage = '';
+$presetError = '';
+$selectedPreset = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  csrf_verify();
+  $action = trim((string)post('preset_action', ''));
+  if ($action === 'save_preset') {
+    $presetName = trim((string)post('preset_name', ''));
+    $presetId = (int)post('preset_id', 0);
+    if ($presetName === '') {
+      $presetError = 'Preset name is required.';
+    } else {
+      $payload = digest_preset_payload(
+        trim((string)post('range', 'week')),
+        trim((string)post('date_from', '')),
+        trim((string)post('date_to', '')),
+        (int)post('employee_id', 0),
+        trim((string)post('status', 'all')),
+      );
+      if (save_digest_preset((int)$me['id'], $presetName, $payload, $presetId > 0 ? $presetId : null)) {
+        $presetMessage = $presetId > 0 ? 'Digest preset updated.' : 'Digest preset saved.';
+      } else {
+        $presetError = 'Unable to save the digest preset.';
+      }
+    }
+  } elseif ($action === 'delete_preset') {
+    $presetId = (int)post('preset_id', 0);
+    if ($presetId > 0 && delete_digest_preset($presetId, (int)$me['id'])) {
+      $presetMessage = 'Digest preset deleted.';
+    } else {
+      $presetError = 'Unable to delete that digest preset.';
+    }
+  }
+}
+
+$selectedPresetId = (int)getv('preset_id', 0);
+if ($selectedPresetId > 0) {
+  $selectedPreset = fetch_digest_preset_by_id($selectedPresetId, (int)$me['id']);
+  if ($selectedPreset && !empty($selectedPreset['preset'])) {
+    foreach (['range','date_from','date_to','employee_id','status'] as $k) {
+      if (isset($selectedPreset['preset'][$k]) && !isset($_GET[$k])) {
+        $_GET[$k] = (string)$selectedPreset['preset'][$k];
+      }
+    }
+  }
+}
+
 $range = trim((string)getv('range', 'week'));
 $employee_id = (int)getv('employee_id', 0);
 $status = trim((string)getv('status', 'all'));
@@ -89,6 +138,7 @@ $shareQuery = http_build_query(array_filter([
 
 $users = [];
 if ($res = $mysqli->query("SELECT id,name FROM users WHERE active=1 ORDER BY name ASC")) while ($x = $res->fetch_assoc()) $users[] = $x;
+$presets = fetch_digest_presets_for_user((int)$me['id']);
 
 include __DIR__.'/../header.php';
 ?>
@@ -98,44 +148,93 @@ include __DIR__.'/../header.php';
     <p class="muted">Create a copy-ready summary for email, chat, or weekly management updates.</p>
   </div>
   <div class="actions-inline">
-    <a class="btn" href="<?= url('admin/manager_summary.php') ?>?<?= e($shareQuery) ?>">Open Manager Summary</a>
-    <a class="btn primary" href="<?= url('admin/exports.php') ?>?<?= e($shareQuery) ?>&download=1">Download Matching CSV</a>
+    <a class="btn" href="manager_summary.php?<?= e($shareQuery) ?>">Open Manager Summary</a>
+    <a class="btn primary" href="exports.php?<?= e($shareQuery) ?>&download=1">Download Matching CSV</a>
   </div>
 </div>
 
-<div class="card">
-  <form class="filters filters-6" method="get">
-    <label>Preset Range
-      <select name="range">
-        <option value="today" <?= $range==='today'?'selected':'' ?>>Today</option>
-        <option value="week" <?= $range==='week'?'selected':'' ?>>This Week</option>
-        <option value="month" <?= $range==='month'?'selected':'' ?>>This Month</option>
-        <option value="custom" <?= $range==='custom'?'selected':'' ?>>Custom</option>
-      </select>
-    </label>
-    <label>Date From<input type="date" name="date_from" value="<?= e($date_from) ?>"></label>
-    <label>Date To<input type="date" name="date_to" value="<?= e($date_to) ?>"></label>
-    <label>Employee
-      <select name="employee_id">
-        <option value="0">All</option>
-        <?php foreach ($users as $u): ?>
-          <option value="<?= (int)$u['id'] ?>" <?= $employee_id === (int)$u['id'] ? 'selected' : '' ?>><?= e($u['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </label>
-    <label>Status
-      <select name="status">
-        <option value="all" <?= $status==='all'?'selected':'' ?>>All</option>
-        <option value="pending" <?= $status==='pending'?'selected':'' ?>>Pending</option>
-        <option value="approved" <?= $status==='approved'?'selected':'' ?>>Approved</option>
-        <option value="needs_changes" <?= $status==='needs_changes'?'selected':'' ?>>Needs Changes</option>
-      </select>
-    </label>
-    <div class="actions-inline">
-      <button class="btn primary">Refresh Digest</button>
-      <a class="btn" href="<?= url('admin/digest_builder.php') ?>">Reset</a>
+<?php if ($presetMessage): ?><div class="alert success"><?= e($presetMessage) ?></div><?php endif; ?>
+<?php if ($presetError): ?><div class="alert danger"><?= e($presetError) ?></div><?php endif; ?>
+
+<div class="grid summary-two-col">
+  <div class="card">
+    <form class="filters filters-6" method="get">
+      <label>Preset Range
+        <select name="range">
+          <option value="today" <?= $range==='today'?'selected':'' ?>>Today</option>
+          <option value="week" <?= $range==='week'?'selected':'' ?>>This Week</option>
+          <option value="month" <?= $range==='month'?'selected':'' ?>>This Month</option>
+          <option value="custom" <?= $range==='custom'?'selected':'' ?>>Custom</option>
+        </select>
+      </label>
+      <label>Date From<input type="date" name="date_from" value="<?= e($date_from) ?>"></label>
+      <label>Date To<input type="date" name="date_to" value="<?= e($date_to) ?>"></label>
+      <label>Employee
+        <select name="employee_id">
+          <option value="0">All</option>
+          <?php foreach ($users as $u): ?>
+            <option value="<?= (int)$u['id'] ?>" <?= $employee_id === (int)$u['id'] ? 'selected' : '' ?>><?= e($u['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="all" <?= $status==='all'?'selected':'' ?>>All</option>
+          <option value="pending" <?= $status==='pending'?'selected':'' ?>>Pending</option>
+          <option value="approved" <?= $status==='approved'?'selected':'' ?>>Approved</option>
+          <option value="needs_changes" <?= $status==='needs_changes'?'selected':'' ?>>Needs Changes</option>
+        </select>
+      </label>
+      <div class="actions-inline">
+        <button class="btn primary">Refresh Digest</button>
+        <a class="btn" href="<?= url('admin/digest_builder.php') ?>">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-head split"><div><h3>Digest Presets</h3><div class="subtle">Save common management filter sets for weekly and monthly digests.</div></div></div>
+    <form method="post" class="form crm-form">
+      <?php csrf_input(); ?>
+      <input type="hidden" name="preset_action" value="save_preset">
+      <input type="hidden" name="preset_id" value="<?= $selectedPresetId > 0 ? $selectedPresetId : 0 ?>">
+      <input type="hidden" name="range" value="<?= e($range) ?>">
+      <input type="hidden" name="date_from" value="<?= e($date_from) ?>">
+      <input type="hidden" name="date_to" value="<?= e($date_to) ?>">
+      <input type="hidden" name="employee_id" value="<?= (int)$employee_id ?>">
+      <input type="hidden" name="status" value="<?= e($status) ?>">
+      <label>Preset Name<input type="text" name="preset_name" value="<?= e($selectedPreset['name'] ?? '') ?>" placeholder="Weekly rep digest"></label>
+      <div class="form-actions"><button class="btn primary">Save Current Filters as Preset</button></div>
+    </form>
+    <div class="table-wrap" style="margin-top:1rem;">
+      <table class="table">
+        <thead><tr><th>Name</th><th>Filters</th><th style="width:190px">Actions</th></tr></thead>
+        <tbody>
+        <?php if (!$presets): ?>
+          <tr><td colspan="3" class="muted">No digest presets saved yet.</td></tr>
+        <?php else: foreach ($presets as $preset): $p = $preset['preset']; ?>
+          <tr>
+            <td><strong><?= e($preset['name']) ?></strong><br><small class="muted">Updated <?= e((string)$preset['updated_at']) ?></small></td>
+            <td>
+              <small class="muted"><?= e((string)($p['range'] ?? 'custom')) ?> · <?= e((string)($p['date_from'] ?? '')) ?> to <?= e((string)($p['date_to'] ?? '')) ?> · <?= e((string)($p['status'] ?? 'all')) ?></small>
+            </td>
+            <td>
+              <div class="actions-inline">
+                <a class="btn" href="<?= url('admin/digest_builder.php?preset_id='.(int)$preset['id']) ?>">Load</a>
+                <form method="post" onsubmit="return confirm('Delete this preset?');" style="display:inline;">
+                  <?php csrf_input(); ?>
+                  <input type="hidden" name="preset_action" value="delete_preset">
+                  <input type="hidden" name="preset_id" value="<?= (int)$preset['id'] ?>">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        <?php endforeach; endif; ?>
+        </tbody>
+      </table>
     </div>
-  </form>
+  </div>
 </div>
 
 <div class="summary-grid summary-grid-dashboard summary-grid-tight">
