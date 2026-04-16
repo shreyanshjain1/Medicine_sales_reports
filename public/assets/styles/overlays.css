@@ -1,0 +1,3 @@
+.modal,.drawer,.offcanvas{backdrop-filter:blur(10px)}
+.quick-action-card{border:1px solid var(--border);border-radius:14px;padding:1rem;background:#fff;box-shadow:var(--shadow-sm)}
+.quick-action-card:hover{border-color:#a7f3d0}

@@ -1,0 +1,10 @@
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px;background:#fff}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:.6rem;border-bottom:1px solid var(--border);vertical-align:top}
+.table th{background:#f8fafc;color:#374151;text-align:left;font-weight:700}
+.table tr:hover td{background:#fcfffd}
+.table tr.sub td{background:#f9fafb;color:#374151}
+.table td small{display:block}
+.pagination{margin-top:1rem}
+.pagination .page{margin:.1rem;padding:.4rem .6rem;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--primary-ink)}
+.pagination .active{background:#d1fae5}
