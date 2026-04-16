@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   district_manager_id INT NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
   wants_email_notifications TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL DEFAULT NULL,
+  last_login_ip VARCHAR(64) NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_users_active_role (active, role),
   KEY idx_users_district_manager (district_manager_id),
@@ -90,7 +92,6 @@ CREATE TABLE IF NOT EXISTS reports (
 CREATE TABLE IF NOT EXISTS events (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
-  parent_event_id INT DEFAULT NULL,
   title VARCHAR(200) NOT NULL,
   city VARCHAR(120) DEFAULT NULL,
   doctor_id INT DEFAULT NULL,
@@ -100,24 +101,16 @@ CREATE TABLE IF NOT EXISTS events (
   visit_datetime DATETIME DEFAULT NULL,
   summary TEXT DEFAULT NULL,
   remarks TEXT DEFAULT NULL,
-  status ENUM('planned','in_progress','completed','cancelled','overdue') NOT NULL DEFAULT 'planned',
-  recurrence_pattern ENUM('none','daily','weekly','monthly') NOT NULL DEFAULT 'none',
-  recurrence_until DATE DEFAULT NULL,
-  recurrence_count INT NOT NULL DEFAULT 0,
   start DATETIME NOT NULL,
   end DATETIME DEFAULT NULL,
   all_day TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_events_user_id (user_id),
-  KEY idx_events_parent (parent_event_id),
   KEY idx_events_start (start),
   KEY idx_events_doctor_id (doctor_id),
   KEY idx_events_visit_dt (visit_datetime),
-  KEY idx_events_status (status),
-  KEY idx_events_recurrence (recurrence_pattern, recurrence_until),
   CONSTRAINT fk_events_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_events_doctor FOREIGN KEY (doctor_id) REFERENCES doctors_masterlist(id) ON DELETE SET NULL,
-  CONSTRAINT fk_events_parent FOREIGN KEY (parent_event_id) REFERENCES events(id) ON DELETE SET NULL
+  CONSTRAINT fk_events_doctor FOREIGN KEY (doctor_id) REFERENCES doctors_masterlist(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS event_attendees (

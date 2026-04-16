@@ -101,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($ok) {
+      log_audit('user_updated','user',$editId,'User account updated by manager');
       $editUser['name'] = $newName;
       $editUser['email'] = $newEmail;
       $editUser['role'] = $newRole;

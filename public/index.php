@@ -6,6 +6,10 @@ $info='';
 if(isset($_GET['reset']) && $_GET['reset']==='success'){
   $info='Password updated successfully. Please sign in with your new password.';
 }
+if(isset($_GET['timeout'])){
+  $map=['idle'=>'Your session expired due to inactivity. Please sign in again.','absolute'=>'Your session reached the security limit. Please sign in again.'];
+  $info=$map[$_GET['timeout']] ?? 'Please sign in again.';
+}
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_verify();
   $email=normalize_email(trim(post('email','')));
@@ -22,6 +26,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($u=$res->fetch_assoc()){
       if((int)$u['active'] === 1 && password_verify($pass,$u['password_hash'])){
         $_SESSION['user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role'=>role_norm($u['role']),'wants_email_notifications'=>(int)($u['wants_email_notifications'] ?? 1)];
+        session_mark_login((int)$u['id']);
         record_login_attempt($email, true);
         log_audit('login_success', 'user', (int)$u['id'], 'Successful sign in');
         header('Location: '.url('dashboard.php')); exit;

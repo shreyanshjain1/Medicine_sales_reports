@@ -302,7 +302,4 @@ hr{ border: none; height: 1px; background: linear-gradient(90deg, transparent, #
 }
 
 
-/* PR 27 task workflow */
-.badge.info{background:#e0f2fe;color:#075985}.badge.warning{background:#fef3c7;color:#92400e}.badge.success{background:#dcfce7;color:#166534}.badge.danger{background:#fee2e2;color:#991b1b}
-.task-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
-.task-workflow-note{padding:.75rem 1rem;border:1px dashed #cbd5e1;border-radius:14px;background:#f8fafc;color:#475569}
+.session-warning{position:fixed;right:18px;bottom:18px;z-index:9999}.session-warning-card{background:#111827;color:#fff;padding:14px 16px;border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.25);max-width:320px}.session-warning-card .muted{color:#d1d5db}.session-warning-timer{font-size:1.1rem;font-weight:700;margin:.5rem 0}.tiny{font-size:.82rem}

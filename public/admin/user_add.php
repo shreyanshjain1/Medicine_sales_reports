@@ -19,7 +19,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       $stmt=$mysqli->prepare('INSERT INTO users (name,email,password_hash,role,district_manager_id) VALUES (?,?,?, ?, NULL)');
       $stmt->bind_param('ssss',$name,$email,$hash,$role);
     }
-    if($stmt->execute()) $ok=true; else $errors[]='Failed to create user.';
+    if($stmt->execute()) { $ok=true; $newUserId=(int)$stmt->insert_id; log_audit('user_created','user',$newUserId,'User account created by manager'); } else $errors[]='Failed to create user.';
   }
 }
 $title='Add User'; include __DIR__.'/../header.php';

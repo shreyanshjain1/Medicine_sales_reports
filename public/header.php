@@ -4,6 +4,9 @@ require_login();
 
 // Used for conditional asset loading (important for offline mode)
 $activePage = basename($_SERVER['PHP_SELF'] ?? '');
+$sessionRemaining = session_seconds_remaining();
+$sessionWarn = session_warning_seconds();
+$lastLoginMeta = user_last_login_meta((int)(user()['id'] ?? 0));
 ?>
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,6 +22,11 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
 <script>
   window.CSRF_TOKEN = "<?= e(csrf_token()) ?>";
   window.BASE_URL = "<?= e(BASE_URL_EFFECTIVE) ?>";
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('<?= url('sw.js') ?>').catch(()=>{});
+    });
+  }
 </script>
 
 <link rel="stylesheet" href="<?= url('assets/style.css') ?>">
@@ -37,12 +45,8 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
 <?php endif; ?>
 
 <script src="<?= url('assets/app.js') ?>" defer></script>
-<script src="<?= url('assets/js/core.js') ?>" defer></script>
-<script src="<?= url('assets/js/quick-task.js') ?>" defer></script>
-<script src="<?= url('assets/js/offline-reports.js') ?>" defer></script>
-<script src="<?= url('assets/js/pwa.js') ?>" defer></script>
 </head>
-<body class="light">
+<body class="light" data-session-remaining="<?= (int)$sessionRemaining ?>" data-session-warning="<?= (int)$sessionWarn ?>">
 
 <header class="topbar glass">
   <?php $active = basename($_SERVER['PHP_SELF']); ?>
@@ -71,6 +75,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
       <?= e(user()['name']) ?> <small class="pill"><?= e(user()['role']) ?></small>
     </div>
     <div class="muted"><?= e(user()['email']) ?></div>
+    <?php if(!empty($lastLoginMeta['last_login_at'])): ?><div class="muted tiny">Last login: <?= e((string)$lastLoginMeta['last_login_at']) ?><?php if(!empty($lastLoginMeta['last_login_ip'])): ?> · <?= e((string)$lastLoginMeta['last_login_ip']) ?><?php endif; ?></div><?php endif; ?>
     <div id="clock" class="clock"></div>
 
     <div class="muted" style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">

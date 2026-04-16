@@ -148,7 +148,9 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## PR 27 Task Workflow
-- Added a task status pipeline: planned, in progress, completed, cancelled, and overdue.
-- Added simple recurring task support for daily, weekly, and monthly visit generation.
-- Added admin task filtering by status and recurrence visibility.
+## Security updates
+- idle session timeout with warning banner
+- absolute session lifetime limit
+- session ID regeneration on login
+- last login timestamp and IP capture
+- expanded audit coverage for user/admin actions
