@@ -148,8 +148,7 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## PR 25 additions
-
-- Event-specific notification preferences in **Profile** for review updates, task assignments, security alerts, and digest emails.
-- Saved **Digest Presets** in the manager digest builder so common weekly/monthly filter sets can be reused.
-- Database updates for new user notification preference columns and preset persistence.
+## Latest Admin Data Tools
+- Duplicate detection in doctors, hospitals, and medicines masters
+- CSV import for master records
+- CSV export for filtered master lists

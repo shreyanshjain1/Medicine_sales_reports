@@ -14,10 +14,6 @@ CREATE TABLE IF NOT EXISTS users (
   district_manager_id INT NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
   wants_email_notifications TINYINT(1) NOT NULL DEFAULT 1,
-  notify_review_updates TINYINT(1) NOT NULL DEFAULT 1,
-  notify_task_assignments TINYINT(1) NOT NULL DEFAULT 1,
-  notify_security_alerts TINYINT(1) NOT NULL DEFAULT 1,
-  notify_digest_emails TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_users_active_role (active, role),
   KEY idx_users_district_manager (district_manager_id),
@@ -243,3 +239,8 @@ CREATE TABLE IF NOT EXISTS manager_digest_presets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+ALTER TABLE doctors_masterlist ADD INDEX idx_doctors_name_active (active, dr_name(100));
+ALTER TABLE hospitals_master ADD INDEX idx_hospitals_name_active (active, name(100));
+ALTER TABLE medicines_master ADD INDEX idx_medicines_name_active (active, name(100));
