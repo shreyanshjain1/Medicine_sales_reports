@@ -1,27 +1,20 @@
 <?php
 require_once __DIR__.'/../../init.php';
-require_login();
-header('Content-Type: application/json; charset=utf-8');
-
-function json_fail($msg, $code=400){
-  http_response_code($code);
-  echo json_encode(['ok'=>false,'error'=>$msg], JSON_UNESCAPED_SLASHES);
-  exit;
-}
+api_require_login();
+api_require_method('POST');
+api_boot();
 
 $raw = file_get_contents('php://input');
 $payload = json_decode($raw, true);
-if (!is_array($payload)) json_fail('Invalid JSON payload.');
+if (!is_array($payload)) api_error('Invalid JSON payload.', 400, ['Body must be valid JSON.']);
 
 $token = (string)($payload['_token'] ?? '');
-if ($token === '' || !hash_equals(csrf_token(), $token)) json_fail('Invalid CSRF token.');
+if ($token === '' || !hash_equals(csrf_token(), $token)) api_error('Invalid CSRF token.', 403, ['CSRF token mismatch.']);
 
 $items = $payload['items'] ?? [];
-if (!is_array($items)) json_fail('Invalid items.');
+if (!is_array($items)) api_error('Invalid items.', 400, ['items must be an array.']);
 
 $uid = (int)user()['id'];
-
-/* Create idempotency map table (no ALTER needed) */
 $mysqli->query("CREATE TABLE IF NOT EXISTS report_client_map (
   client_uuid VARCHAR(64) PRIMARY KEY,
   report_id INT NOT NULL,
@@ -32,19 +25,26 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS report_client_map (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
 $results = [];
+$summary = ['created' => 0, 'already_synced' => 0, 'failed' => 0];
 foreach ($items as $it) {
-  if (!is_array($it)) { $results[]=['ok'=>false,'error'=>'Invalid item']; continue; }
+  if (!is_array($it)) { $results[]=['success'=>false,'client_id'=>null,'message'=>'Invalid item']; $summary['failed']++; continue; }
 
   $client_id = preg_replace('/[^a-zA-Z0-9_\-]/', '', (string)($it['client_id'] ?? ''));
-  if ($client_id === '') { $results[]=['ok'=>false,'error'=>'Missing client_id']; continue; }
+  if ($client_id === '') { $results[]=['success'=>false,'client_id'=>null,'message'=>'Missing client_id']; $summary['failed']++; continue; }
 
-  // Already synced?
   $stmt = $mysqli->prepare("SELECT report_id FROM report_client_map WHERE client_uuid=? AND user_id=? LIMIT 1");
+  if (!$stmt) {
+    $results[]=['success'=>false,'client_id'=>$client_id,'message'=>'Idempotency lookup failed.'];
+    $summary['failed']++;
+    continue;
+  }
   $stmt->bind_param('si', $client_id, $uid);
   $stmt->execute();
   $existing = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
   if ($existing) {
-    $results[] = ['ok'=>true,'client_id'=>$client_id,'report_id'=>(int)$existing['report_id'],'already'=>true];
+    $results[] = ['success'=>true,'client_id'=>$client_id,'report_id'=>(int)$existing['report_id'],'already'=>true,'message'=>'Already synced.'];
+    $summary['already_synced']++;
     continue;
   }
 
@@ -54,20 +54,19 @@ foreach ($items as $it) {
   $medicine_name = trim((string)($it['medicine_name'] ?? ''));
   $hospital_name = trim((string)($it['hospital_name'] ?? ''));
   $visit_dt      = trim((string)($it['visit_datetime'] ?? ''));
-  $summary       = trim((string)($it['summary'] ?? ''));
+  $summaryText   = trim((string)($it['summary'] ?? ''));
   $remarks       = trim((string)($it['remarks'] ?? ''));
 
   if ($doctor_name === '' || $visit_dt === '') {
-    $results[] = ['ok'=>false,'client_id'=>$client_id,'error'=>'Doctor Name and Visit Date/Time are required.'];
+    $results[] = ['success'=>false,'client_id'=>$client_id,'message'=>'Doctor Name and Visit Date/Time are required.'];
+    $summary['failed']++;
     continue;
   }
 
-  // Normalize datetime-local format to MySQL DATETIME (best-effort)
   if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $visit_dt)) {
     $visit_dt = str_replace('T',' ', $visit_dt).':00';
   }
 
-  // Signature (store relative path like online flow)
   $signature_path = null;
   $sig_data = (string)($it['signature_data'] ?? '');
   if ($sig_data && preg_match('/^data:image\/(png|jpeg);base64,/', $sig_data)) {
@@ -82,7 +81,6 @@ foreach ($items as $it) {
     }
   }
 
-  // Attachment (base64) (store relative path like online flow)
   $attachment_path = null;
   $att = $it['attachment'] ?? null;
   if (is_array($att) && !empty($att['data']) && !empty($att['name'])) {
@@ -90,7 +88,6 @@ foreach ($items as $it) {
     $data = (string)$att['data'];
     $mime = (string)($att['mime'] ?? '');
 
-    // data can be raw base64 OR data:...;base64,...
     if (strpos($data, 'base64,') !== false) $data = explode('base64,', $data, 2)[1];
     $bin = base64_decode($data, true);
 
@@ -98,7 +95,6 @@ foreach ($items as $it) {
       if (!is_dir(ATTACH_DIR)) @mkdir(ATTACH_DIR, 0775, true);
       $ext = pathinfo($name, PATHINFO_EXTENSION);
       if ($ext === '') {
-        // derive from mime
         if ($mime === 'application/pdf') $ext = 'pdf';
         else if ($mime === 'image/png') $ext = 'png';
         else if ($mime === 'image/jpeg') $ext = 'jpg';
@@ -110,7 +106,6 @@ foreach ($items as $it) {
     }
   }
 
-  // Insert report (backward-compatible)
   $rid = db_safe_insert('reports', [
     'user_id' => $uid,
     'doctor_name' => $doctor_name,
@@ -119,7 +114,7 @@ foreach ($items as $it) {
     'medicine_name' => $medicine_name,
     'hospital_name' => $hospital_name,
     'visit_datetime' => $visit_dt,
-    'summary' => $summary,
+    'summary' => $summaryText,
     'remarks' => $remarks,
     'signature_path' => $signature_path,
     'attachment_path' => $attachment_path,
@@ -138,16 +133,27 @@ foreach ($items as $it) {
   }
 
   if ($rid <= 0) {
-    $results[] = ['ok'=>false,'client_id'=>$client_id,'error'=>'DB insert failed.'];
+    $results[] = ['success'=>false,'client_id'=>$client_id,'message'=>'DB insert failed.'];
+    $summary['failed']++;
     continue;
   }
 
-  // Save map for idempotency
-  $stmt2 = $mysqli->prepare("INSERT INTO report_client_map (client_uuid, report_id, user_id) VALUES (?,?,?)");
-  $stmt2->bind_param('sii', $client_id, $rid, $uid);
-  $stmt2->execute();
+  if (function_exists('log_report_status_history')) {
+    log_report_status_history((int)$rid, 'pending', null, 'Offline sync submission created.');
+  }
+  if (function_exists('audit_log')) {
+    audit_log('report_synced_offline', 'report', (int)$rid, 'Offline report synced from device outbox.');
+  }
 
-  $results[] = ['ok'=>true,'client_id'=>$client_id,'report_id'=>$rid,'already'=>false];
+  $stmt2 = $mysqli->prepare("INSERT INTO report_client_map (client_uuid, report_id, user_id) VALUES (?,?,?)");
+  if ($stmt2) {
+    $stmt2->bind_param('sii', $client_id, $rid, $uid);
+    $stmt2->execute();
+    $stmt2->close();
+  }
+
+  $results[] = ['success'=>true,'client_id'=>$client_id,'report_id'=>$rid,'already'=>false,'message'=>'Report synced.'];
+  $summary['created']++;
 }
 
-echo json_encode(['ok'=>true,'results'=>$results], JSON_UNESCAPED_SLASHES);
+api_success(['results'=>$results, 'summary'=>$summary], 'Offline sync processed.');

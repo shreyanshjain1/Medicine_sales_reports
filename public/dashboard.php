@@ -30,7 +30,7 @@
               <td><?= e($row['employee']) ?></td>
               <td><?= e($row['doctor_name']) ?></td>
               <td><span class="pill danger"><?= (int)$row['age_hours'] ?>h</span></td>
-              <td><a class="btn tiny" href="<?= route_url('reports/report_view.php', ['id'=>(int)$row['id']]) ?>">Open</a></td>
+              <td><a class="btn tiny" href="report_view.php?id=<?= (int)$row['id'] ?>">Open</a></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -76,12 +76,13 @@
   window.addEventListener('load', () => {
     if (!window.Chart) return;
 
-    fetch('<?= api_url('chart_data.php') ?>')
+    fetch('api/chart_data.php')
       .then(r=>r.json())
-      .then(d=>{
+      .then(resp=>{
+        const d = (resp && resp.data) ? resp.data : {};
         new Chart(document.getElementById('chartEmployees'),{
           type:'bar',
-          data:{ labels:d.byEmployee.labels, datasets:[{label:'Reports',data:d.byEmployee.data, borderWidth:0, borderRadius:8}] },
+          data:{ labels:(d.byEmployee?.labels || []), datasets:[{label:'Reports',data:(d.byEmployee?.data || []), borderWidth:0, borderRadius:8}] },
           options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
             scales:{ x:{ beginAtZero:true, ticks:{ stepSize:1, callback:v=>Number.isInteger(v)?v:'' } }, y:{ ticks:{ autoSkip:false } } },
             plugins:{ legend:{display:false} }
@@ -89,12 +90,12 @@
         });
         new Chart(document.getElementById('chartStatus'),{
           type:'doughnut',
-          data:{ labels:d.byStatus.labels, datasets:[{ data:d.byStatus.data }] },
+          data:{ labels:(d.byStatus?.labels || []), datasets:[{ data:(d.byStatus?.data || []) }] },
           options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
         });
         new Chart(document.getElementById('chartTimeline'),{
           type:'bar',
-          data:{ labels:d.byDate.labels, datasets:[{label:'Reports / Day',data:d.byDate.data, borderWidth:0, borderRadius:8}] },
+          data:{ labels:(d.byDate?.labels || []), datasets:[{label:'Reports / Day',data:(d.byDate?.data || []), borderWidth:0, borderRadius:8}] },
           options:{ responsive:true, maintainAspectRatio:false,
             scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1, callback:v=>Number.isInteger(v)?v:'' } } },
             plugins:{ legend:{display:false}, tooltip:{ mode:'index', intersect:false } }
@@ -111,12 +112,13 @@
   <script>
   window.addEventListener('load', () => {
     if (!window.Chart) return;
-    fetch('<?= api_url('chart_data.php', ['mine'=>1]) ?>')
+    fetch('api/chart_data.php?mine=1')
       .then(r=>r.json())
-      .then(d=>{
+      .then(resp=>{
+        const d = (resp && resp.data) ? resp.data : {};
         new Chart(document.getElementById('chartMine'),{
           type:'bar',
-          data:{ labels:d.byDate.labels, datasets:[{ label:'My Reports', data:d.byDate.data, borderWidth:0, borderRadius:8 }] },
+          data:{ labels:(d.byDate?.labels || []), datasets:[{ label:'My Reports', data:(d.byDate?.data || []), borderWidth:0, borderRadius:8 }] },
           options:{ responsive:true, maintainAspectRatio:false,
             scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1, callback:v=>Number.isInteger(v)?v:'' } } },
             plugins:{ legend:{display:false}, tooltip:{ mode:'index', intersect:false } }
@@ -157,8 +159,9 @@ window.addEventListener('load', async () => {
 
   let eventsRaw = [];
   try {
-    const resp = await fetch('<?= api_url('api_events.php') ?>');
-    eventsRaw = await resp.json();
+    const resp = await fetch('api/api_events.php');
+    const payload = await resp.json();
+    eventsRaw = (payload && payload.data && Array.isArray(payload.data.events)) ? payload.data.events : [];
   } catch (e) {
     eventsRaw = [];
   }
@@ -200,13 +203,13 @@ window.addEventListener('load', async () => {
     cal.createEvents(eventsV2);
     cal.on('clickEvent', (ev)=>{
       const id = ev?.event?.id ? String(ev.event.id) : '';
-      if (id) window.location = '<?= url('tasks/task_view.php?id=') ?>' + encodeURIComponent(id);
+      if (id) window.location = 'task_view.php?id=' + encodeURIComponent(id);
     });
   } else {
     cal.createSchedules(schedulesV1);
     cal.on('clickSchedule', ({schedule})=>{
       const id = schedule && schedule.id ? String(schedule.id) : '';
-      if (id) window.location = '<?= url('tasks/task_view.php?id=') ?>' + encodeURIComponent(id);
+      if (id) window.location = 'task_view.php?id=' + encodeURIComponent(id);
     });
   }
 

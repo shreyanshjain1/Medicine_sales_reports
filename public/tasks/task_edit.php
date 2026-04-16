@@ -303,7 +303,7 @@ if (!empty($repUsers)) {
     try{
       const r = await fetch('../api/api_doctors.php?city=' + encodeURIComponent(city), {cache:'no-store'});
       const j = await r.json();
-      const list = j.doctors || [];
+      const list = (j && j.data && Array.isArray(j.data.doctors)) ? j.data.doctors : [];
       list.forEach(d=>{
         const o = document.createElement('option');
         o.value = d.id;
