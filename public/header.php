@@ -4,13 +4,10 @@ require_login();
 
 // Used for conditional asset loading (important for offline mode)
 $activePage = basename($_SERVER['PHP_SELF'] ?? '');
-$sessionRemaining = session_seconds_remaining();
-$sessionWarn = session_warning_seconds();
-$lastLoginMeta = user_last_login_meta((int)(user()['id'] ?? 0));
 ?>
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= e(($title??'Dashboard')) ?> · <?= e(APP_NAME) ?></title>
+<title><?= e(($title??'Dashboard')) ?> · <?= e(app_name_value()) ?></title>
 
 <link rel="manifest" href="<?= url('manifest.webmanifest') ?>">
 <meta name="theme-color" content="#0f766e">
@@ -46,11 +43,11 @@ $lastLoginMeta = user_last_login_meta((int)(user()['id'] ?? 0));
 
 <script src="<?= url('assets/app.js') ?>" defer></script>
 </head>
-<body class="light" data-session-remaining="<?= (int)$sessionRemaining ?>" data-session-warning="<?= (int)$sessionWarn ?>">
+<body class="light">
 
 <header class="topbar glass">
   <?php $active = basename($_SERVER['PHP_SELF']); ?>
-  <div class="brand titlecase"><?= e(COMPANY_NAME) ?> · Reporting</div>
+  <div class="brand titlecase"><?= e(company_name_value()) ?> · Reporting</div>
   <nav class="nav titlecase">
     <a class="<?= $active==='dashboard.php'?'active':'' ?>" href="<?= url('dashboard.php') ?>">Dashboard</a>
     <a class="<?= $active==='reports.php'?'active':'' ?>" href="<?= url('reports/reports.php') ?>">Reports</a>
@@ -59,6 +56,7 @@ $lastLoginMeta = user_last_login_meta((int)(user()['id'] ?? 0));
       <a class="<?= $active==='admin_tasks.php'?'active':'' ?>" href="<?= url('admin/admin_tasks.php') ?>">Tasks</a>
       <a class="<?= in_array($active,['admin_users.php','user_add.php','user_edit.php'])?'active':'' ?>" href="<?= url('admin/admin_users.php') ?>">Users</a>
       <a class="<?= $active==='exports.php'?'active':'' ?>" href="<?= url('admin/exports.php') ?>">Export</a>
+      <a class="<?= $active==='settings.php'?'active':'' ?>" href="<?= url('admin/settings.php') ?>">Settings</a>
     <?php endif; ?>
     <?php if (is_manager() || is_district_manager()): ?>
       <a class="<?= $active==='performance.php'?'active':'' ?>" href="<?= url('admin/performance.php') ?>">Performance</a>
@@ -75,7 +73,6 @@ $lastLoginMeta = user_last_login_meta((int)(user()['id'] ?? 0));
       <?= e(user()['name']) ?> <small class="pill"><?= e(user()['role']) ?></small>
     </div>
     <div class="muted"><?= e(user()['email']) ?></div>
-    <?php if(!empty($lastLoginMeta['last_login_at'])): ?><div class="muted tiny">Last login: <?= e((string)$lastLoginMeta['last_login_at']) ?><?php if(!empty($lastLoginMeta['last_login_ip'])): ?> · <?= e((string)$lastLoginMeta['last_login_ip']) ?><?php endif; ?></div><?php endif; ?>
     <div id="clock" class="clock"></div>
 
     <div class="muted" style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -187,6 +184,10 @@ $lastLoginMeta = user_last_login_meta((int)(user()['id'] ?? 0));
         <a class="btn block titlecase" href="<?= url('admin/performance.php') ?>">Performance KPIs</a>
         <a class="btn block titlecase" href="<?= url('admin/approval_sla.php') ?>">Approval SLA</a>
       <?php endif; ?>
+      <?php if (is_manager()): ?>
+        <a class="btn block titlecase" href="<?= url('admin/settings.php') ?>">System Settings</a>
+      <?php endif; ?>
+
     </div>
   </div>
 </aside>

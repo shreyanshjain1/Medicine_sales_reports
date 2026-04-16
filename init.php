@@ -1,13 +1,9 @@
 <?php
 require_once __DIR__ . '/config.php';
+session_start();
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
-  session_start();
-}
-
-if (!defined('SESSION_IDLE_TIMEOUT')) define('SESSION_IDLE_TIMEOUT', 30 * 60);
-if (!defined('SESSION_ABSOLUTE_TIMEOUT')) define('SESSION_ABSOLUTE_TIMEOUT', 12 * 60 * 60);
-if (!defined('SESSION_WARNING_BEFORE')) define('SESSION_WARNING_BEFORE', 2 * 60);
+$settingsHelpers = __DIR__ . '/app/helpers/settings_helpers.php';
+if (is_file($settingsHelpers)) require_once $settingsHelpers;
 
 $components = __DIR__ . '/app/components/form_components.php';
 if (is_file($components)) require_once $components;
@@ -97,16 +93,6 @@ function ensure_core_schema(): void {
 // Run safe schema migration early
 ensure_core_schema();
 
-function ensure_security_schema(): void {
-  if (!empty($_SESSION['_security_schema_v17'])) return;
-  $_SESSION['_security_schema_v17'] = 1;
-  if (_col_exists('users','id')) {
-    if (!_col_exists('users','last_login_at')) _try_sql("ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL DEFAULT NULL AFTER wants_email_notifications");
-    if (!_col_exists('users','last_login_ip')) _try_sql("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(64) NULL DEFAULT NULL AFTER last_login_at");
-  }
-}
-
-ensure_security_schema();
 
 function ensure_performance_schema(): void {
   if (!empty($_SESSION['_performance_schema_v7'])) return;
@@ -130,6 +116,26 @@ function ensure_performance_schema(): void {
 }
 
 ensure_performance_schema();
+
+
+function ensure_settings_schema(): void {
+  if (!empty($_SESSION['_settings_schema_v18'])) return;
+  $_SESSION['_settings_schema_v18'] = 1;
+
+  _try_sql("CREATE TABLE IF NOT EXISTS app_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(120) NOT NULL,
+    setting_value TEXT NULL,
+    setting_type VARCHAR(40) NOT NULL DEFAULT 'string',
+    is_public TINYINT(1) NOT NULL DEFAULT 0,
+    updated_by INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_app_settings_key (setting_key)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+ensure_settings_schema();
 
 function current_target_month(): string {
   return date('Y-m');

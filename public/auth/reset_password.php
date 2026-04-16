@@ -35,7 +35,7 @@ if($row && $_SERVER['REQUEST_METHOD']==='POST'){
 }
 ?><!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= e($title) ?> · <?= e(APP_NAME) ?></title>
+<title><?= e($title) ?> · <?= e(app_name_value()) ?></title>
 <link rel="stylesheet" href="<?= url('assets/style.css') ?>"></head>
 <body class="light auth">
   <div class="login-wrap">
