@@ -433,132 +433,65 @@ function fetch_reviewer_backlog(int $limit=10): array {
   return $rows;
 }
 
-
-
-function ensure_notification_preference_schema(): void {
-  if (!empty($_SESSION['_notification_pref_schema_v25'])) return;
-  $_SESSION['_notification_pref_schema_v25'] = 1;
-
-  if (_col_exists('users','id')) {
-    if (!_col_exists('users','notify_review_updates')) _try_sql("ALTER TABLE users ADD COLUMN notify_review_updates TINYINT(1) NOT NULL DEFAULT 1 AFTER wants_email_notifications");
-    if (!_col_exists('users','notify_task_assignments')) _try_sql("ALTER TABLE users ADD COLUMN notify_task_assignments TINYINT(1) NOT NULL DEFAULT 1 AFTER notify_review_updates");
-    if (!_col_exists('users','notify_security_alerts')) _try_sql("ALTER TABLE users ADD COLUMN notify_security_alerts TINYINT(1) NOT NULL DEFAULT 1 AFTER notify_task_assignments");
-    if (!_col_exists('users','notify_digest_emails')) _try_sql("ALTER TABLE users ADD COLUMN notify_digest_emails TINYINT(1) NOT NULL DEFAULT 0 AFTER notify_security_alerts");
-  }
-
-  _try_sql("CREATE TABLE IF NOT EXISTS manager_digest_presets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(120) NOT NULL,
-    user_id INT NOT NULL,
-    preset_payload TEXT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    KEY idx_digest_preset_user (user_id),
-    CONSTRAINT fk_digest_preset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-}
-
-ensure_notification_preference_schema();
-
-function user_pref_enabled(?array $u, string $key, int $default=1): bool {
-  if (!$u) return (bool)$default;
-  return isset($u[$key]) ? (int)$u[$key] === 1 : (bool)$default;
-}
-
-function refresh_session_user_preferences(int $userId): void {
-  global $mysqli;
-  if (empty($_SESSION['user']) || (int)($_SESSION['user']['id'] ?? 0) !== $userId) return;
-  $stmt = $mysqli->prepare("SELECT wants_email_notifications, notify_review_updates, notify_task_assignments, notify_security_alerts, notify_digest_emails FROM users WHERE id=? LIMIT 1");
-  if (!$stmt) return;
-  $stmt->bind_param('i', $userId);
-  $stmt->execute();
-  $row = $stmt->get_result()->fetch_assoc() ?: [];
-  $stmt->close();
-  foreach (['wants_email_notifications','notify_review_updates','notify_task_assignments','notify_security_alerts','notify_digest_emails'] as $k) {
-    if (array_key_exists($k, $row)) $_SESSION['user'][$k] = (int)$row[$k];
-  }
-}
-
-function save_user_notification_preferences(int $userId, array $prefs): bool {
-  global $mysqli;
-  $payload = [
-    'wants_email_notifications' => !empty($prefs['wants_email_notifications']) ? 1 : 0,
-    'notify_review_updates' => !empty($prefs['notify_review_updates']) ? 1 : 0,
-    'notify_task_assignments' => !empty($prefs['notify_task_assignments']) ? 1 : 0,
-    'notify_security_alerts' => !empty($prefs['notify_security_alerts']) ? 1 : 0,
-    'notify_digest_emails' => !empty($prefs['notify_digest_emails']) ? 1 : 0,
-  ];
-  $stmt = $mysqli->prepare("UPDATE users SET wants_email_notifications=?, notify_review_updates=?, notify_task_assignments=?, notify_security_alerts=?, notify_digest_emails=? WHERE id=?");
-  if (!$stmt) return false;
-  $stmt->bind_param('iiiiii', $payload['wants_email_notifications'], $payload['notify_review_updates'], $payload['notify_task_assignments'], $payload['notify_security_alerts'], $payload['notify_digest_emails'], $userId);
-  $ok = $stmt->execute();
-  $stmt->close();
-  if ($ok) refresh_session_user_preferences($userId);
-  return $ok;
-}
-
-function digest_preset_payload(string $range, string $dateFrom, string $dateTo, int $employeeId, string $status): string {
-  return json_encode([
-    'range' => $range,
-    'date_from' => $dateFrom,
-    'date_to' => $dateTo,
-    'employee_id' => $employeeId,
-    'status' => $status,
-  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-}
-
-function fetch_digest_presets_for_user(int $userId): array {
-  global $mysqli;
-  $rows = [];
-  $stmt = $mysqli->prepare("SELECT id, name, preset_payload, created_at, updated_at FROM manager_digest_presets WHERE user_id=? ORDER BY updated_at DESC, id DESC");
-  if (!$stmt) return $rows;
-  $stmt->bind_param('i', $userId);
-  $stmt->execute();
-  $res = $stmt->get_result();
-  while ($row = $res->fetch_assoc()) {
-    $row['preset'] = json_decode((string)($row['preset_payload'] ?? '{}'), true) ?: [];
-    $rows[] = $row;
-  }
-  $stmt->close();
-  return $rows;
-}
-
-function fetch_digest_preset_by_id(int $presetId, int $userId): ?array {
-  global $mysqli;
-  $stmt = $mysqli->prepare("SELECT id, name, preset_payload FROM manager_digest_presets WHERE id=? AND user_id=? LIMIT 1");
-  if (!$stmt) return null;
-  $stmt->bind_param('ii', $presetId, $userId);
-  $stmt->execute();
-  $row = $stmt->get_result()->fetch_assoc() ?: null;
-  $stmt->close();
-  if ($row) $row['preset'] = json_decode((string)($row['preset_payload'] ?? '{}'), true) ?: [];
-  return $row;
-}
-
-function save_digest_preset(int $userId, string $name, string $payload, ?int $presetId=null): bool {
-  global $mysqli;
-  if ($presetId && $presetId > 0) {
-    $stmt = $mysqli->prepare("UPDATE manager_digest_presets SET name=?, preset_payload=? WHERE id=? AND user_id=?");
-    if (!$stmt) return false;
-    $stmt->bind_param('ssii', $name, $payload, $presetId, $userId);
-  } else {
-    $stmt = $mysqli->prepare("INSERT INTO manager_digest_presets (name, user_id, preset_payload) VALUES (?,?,?)");
-    if (!$stmt) return false;
-    $stmt->bind_param('sis', $name, $userId, $payload);
-  }
-  $ok = $stmt->execute();
-  $stmt->close();
-  return $ok;
-}
-
-function delete_digest_preset(int $presetId, int $userId): bool {
-  global $mysqli;
-  $stmt = $mysqli->prepare("DELETE FROM manager_digest_presets WHERE id=? AND user_id=?");
-  if (!$stmt) return false;
-  $stmt->bind_param('ii', $presetId, $userId);
-  $ok = $stmt->execute();
-  $stmt->close();
-  return $ok;
-}
-
 ?>
+
+if (!function_exists('csv_rows_from_upload')) {
+function csv_rows_from_upload(string $field): array {
+  if (empty($_FILES[$field]['tmp_name']) || !is_uploaded_file($_FILES[$field]['tmp_name'])) return [];
+  $handle = fopen($_FILES[$field]['tmp_name'], 'r');
+  if (!$handle) return [];
+  $rows = [];
+  $headers = [];
+  while (($row = fgetcsv($handle)) !== false) {
+    if (!$headers) {
+      $headers = array_map(function($v){ return strtolower(trim((string)$v)); }, $row);
+      continue;
+    }
+    if (!array_filter($row, fn($v)=>trim((string)$v)!=='')) continue;
+    $item = [];
+    foreach ($headers as $i => $h) $item[$h] = trim((string)($row[$i] ?? ''));
+    $rows[] = $item;
+  }
+  fclose($handle);
+  return $rows;
+}}
+
+if (!function_exists('csv_download')) {
+function csv_download(string $filename, array $headers, array $rows): void {
+  header('Content-Type: text/csv; charset=utf-8');
+  header('Content-Disposition: attachment; filename="'.$filename.'"');
+  $out = fopen('php://output', 'w');
+  fputcsv($out, $headers);
+  foreach ($rows as $row) fputcsv($out, $row);
+  fclose($out);
+  exit;
+}}
+
+if (!function_exists('master_normalize_key')) {
+function master_normalize_key(string $value): string {
+  $value = strtolower(trim($value));
+  $value = preg_replace('/[^a-z0-9]+/i', ' ', $value);
+  return trim((string)$value);
+}}
+
+if (!function_exists('master_find_possible_duplicates')) {
+function master_find_possible_duplicates(string $table, string $nameColumn, string $name, int $excludeId = 0, array $extraLikeColumns = []): array {
+  global $mysqli;
+  $name = trim($name);
+  if ($name === '') return [];
+  $safe = '%'.$mysqli->real_escape_string($name).'%';
+  $conditions = ["{$nameColumn} LIKE '{$safe}'"];
+  foreach ($extraLikeColumns as $col => $value) {
+    $value = trim((string)$value);
+    if ($value !== '') {
+      $safeVal = '%'.$mysqli->real_escape_string($value).'%';
+      $conditions[] = "{$col} LIKE '{$safeVal}'";
+    }
+  }
+  $sql = "SELECT * FROM {$table} WHERE active=1 AND (".implode(' OR ', $conditions).")";
+  if ($excludeId > 0) $sql .= " AND id<>".(int)$excludeId;
+  $sql .= " ORDER BY {$nameColumn} ASC LIMIT 10";
+  $rows = [];
+  if ($res = $mysqli->query($sql)) { while($row = $res->fetch_assoc()) $rows[] = $row; $res->free(); }
+  return $rows;
+}}
