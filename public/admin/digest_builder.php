@@ -98,8 +98,8 @@ include __DIR__.'/../header.php';
     <p class="muted">Create a copy-ready summary for email, chat, or weekly management updates.</p>
   </div>
   <div class="actions-inline">
-    <a class="btn" href="manager_summary.php?<?= e($shareQuery) ?>">Open Manager Summary</a>
-    <a class="btn primary" href="exports.php?<?= e($shareQuery) ?>&download=1">Download Matching CSV</a>
+    <a class="btn" href="<?= url('admin/manager_summary.php') ?>?<?= e($shareQuery) ?>">Open Manager Summary</a>
+    <a class="btn primary" href="<?= url('admin/exports.php') ?>?<?= e($shareQuery) ?>&download=1">Download Matching CSV</a>
   </div>
 </div>
 

@@ -119,9 +119,9 @@ include __DIR__.'/../header.php';
     <p class="muted">Printable management snapshot for activity, coverage, approvals, and territory focus.</p>
   </div>
   <div class="actions-inline">
-    <a class="btn" href="digest_builder.php?<?= e($shareQuery) ?>">Open Digest Builder</a>
-    <a class="btn" href="exports.php?<?= e($shareQuery) ?>">Open Export Center</a>
-    <a class="btn primary" href="manager_summary.php?<?= e($shareQuery) ?>&print=1" target="_blank">Print View</a>
+    <a class="btn" href="<?= url('admin/digest_builder.php') ?>?<?= e($shareQuery) ?>">Open Digest Builder</a>
+    <a class="btn" href="<?= url('admin/exports.php') ?>?<?= e($shareQuery) ?>">Open Export Center</a>
+    <a class="btn primary" href="<?= url('admin/manager_summary.php') ?>?<?= e($shareQuery) ?>&print=1" target="_blank">Print View</a>
   </div>
 </div>
 

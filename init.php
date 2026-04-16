@@ -2,6 +2,9 @@
 require_once __DIR__ . '/config.php';
 session_start();
 
+$pathHelpers = __DIR__ . '/app/helpers/path_helpers.php';
+if (is_file($pathHelpers)) require_once $pathHelpers;
+
 $components = __DIR__ . '/app/components/form_components.php';
 if (is_file($components)) require_once $components;
 
@@ -195,7 +198,6 @@ function upsert_performance_target(int $userId, string $month, int $targetReport
 }
 
 
-function url($path=''){ return rtrim(BASE_URL_EFFECTIVE,'/') . '/' . ltrim($path,'/'); }
 function is_logged_in(){ return isset($_SESSION['user']); }
 function user(){ return $_SESSION['user'] ?? null; }
 function require_login(){ if(!is_logged_in()){ header('Location: '.url('index.php')); exit; } }

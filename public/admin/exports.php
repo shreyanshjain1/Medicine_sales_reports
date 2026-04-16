@@ -74,7 +74,7 @@ include __DIR__.'/../header.php';
     <h2>Export Center</h2>
     <div class="subtle">Build cleaner exports using report status, rep, doctor, medicine, hospital, and date filters.</div>
   </div>
-  <a class="btn" href="reports.php?<?= e(http_build_query(array_filter([
+  <a class="btn" href="<?= url('reports/reports.php') ?>?<?= e(http_build_query(array_filter([
     'employee_id' => $employee_id ?: null,
     'date_from' => $date_from ?: null,
     'date_to' => $date_to ?: null,
@@ -92,13 +92,13 @@ include __DIR__.'/../header.php';
     <div class="subtle">Turn the same filtered dataset into a printable summary or copy-ready digest.</div>
   </div>
   <div class="actions-inline">
-    <a class="btn" href="manager_summary.php?<?= e(http_build_query(array_filter([
+    <a class="btn" href="<?= url('admin/manager_summary.php') ?>?<?= e(http_build_query(array_filter([
       'employee_id' => $employee_id ?: null,
       'date_from' => $date_from ?: null,
       'date_to' => $date_to ?: null,
       'status' => $status !== 'all' ? $status : null,
     ], static fn($v) => $v !== null && $v !== ''))) ?>">Open Manager Summary</a>
-    <a class="btn primary" href="digest_builder.php?<?= e(http_build_query(array_filter([
+    <a class="btn primary" href="<?= url('admin/digest_builder.php') ?>?<?= e(http_build_query(array_filter([
       'employee_id' => $employee_id ?: null,
       'date_from' => $date_from ?: null,
       'date_to' => $date_to ?: null,

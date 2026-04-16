@@ -100,7 +100,7 @@ $title='Reports'; include __DIR__.'/../header.php';
           <td><?= e($r['hospital_name']) ?></td>
           <td><?= $r['visit_datetime'] ? e(date('Y-m-d H:i', strtotime($r['visit_datetime']))) : '—' ?></td>
           <td><?= ui_badge((string)($r['status'] ?: 'pending'), (string)($r['status'] ?: 'pending')) ?></td>
-          <td><div class="actions-inline"><a class="btn tiny" href="report_view.php?id=<?= (int)$r['id'] ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="report_edit.php?id=<?= (int)$r['id'] ?>">Edit</a><?php endif; ?></div></td>
+          <td><div class="actions-inline"><a class="btn tiny" href="<?= route_url('reports/report_view.php', ['id'=>(int)$r['id']]) ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="<?= route_url('reports/report_edit.php', ['id'=>(int)$r['id']]) ?>">Edit</a><?php endif; ?></div></td>
         </tr>
       <?php endforeach; endif; ?>
       </tbody>

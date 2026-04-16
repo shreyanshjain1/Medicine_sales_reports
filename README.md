@@ -146,3 +146,9 @@ public/
 - Shared form component helpers for consistent inputs, textareas, checkboxes, and grouped validation messages
 - Cleaner validation UI across report, task, profile, and master-data screens
 - Field-level inline errors so users can fix inputs faster without guessing
+
+
+## Routing and path helpers
+- Shared route, asset, and API URL helpers are loaded from `app/helpers/path_helpers.php`.
+- Nested pages should use `route_url()`, `asset_url()`, and `api_url()` instead of brittle relative paths.
+

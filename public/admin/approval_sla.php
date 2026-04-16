@@ -15,8 +15,8 @@ include __DIR__.'/../header.php';
     <div class="subtle">Track what is overdue, who has backlog, and which approvals need attention first.</div>
   </div>
   <div class="actions-inline">
-    <a class="btn" href="approvals.php?status=pending">Open Pending Queue</a>
-    <a class="btn primary" href="approvals.php?status=needs_changes">Needs Changes</a>
+    <a class="btn" href="<?= route_url('admin/approvals.php', ['status'=>'pending']) ?>">Open Pending Queue</a>
+    <a class="btn primary" href="<?= route_url('admin/approvals.php', ['status'=>'needs_changes']) ?>">Needs Changes</a>
   </div>
 </div>
 <div class="summary-grid summary-grid-dashboard">
@@ -73,7 +73,7 @@ include __DIR__.'/../header.php';
           <td><?= e($row['hospital_name']) ?></td>
           <td><?= e((string)$row['visit_datetime']) ?></td>
           <td><span class="pill danger"><?= (int)$row['age_hours'] ?>h</span></td>
-          <td><a class="btn tiny primary" href="report_view.php?id=<?= (int)$row['id'] ?>">Review</a></td>
+          <td><a class="btn tiny primary" href="<?= route_url('reports/report_view.php', ['id'=>(int)$row['id']]) ?>">Review</a></td>
         </tr>
       <?php endforeach; endif; ?>
       </tbody>
