@@ -1,12 +1,13 @@
 <?php
-// public/api_events.php — replace entire file to ensure IDs are sent and strings are safe
-require_once __DIR__.'/../../init.php'; require_login();
-header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__.'/../../init.php';
+api_require_login();
+api_require_method('GET');
+api_boot();
 
 $uid = (int)user()['id'];
-$role = (string)(user()['role'] ?? 'employee');
-$isManager = ($role === 'manager');
-$isDistrict = ($role === 'district_manager');
+$role = my_role();
+$isManager = is_manager();
+$isDistrict = is_district_manager();
 
 $sql = "SELECT e.id,e.title,e.city,e.doctor_id,
                e.start, COALESCE(e.end,e.start) AS end, e.all_day,
@@ -20,7 +21,6 @@ if ($r = $mysqli->query("SHOW TABLES LIKE 'event_attendees'")) {
 }
 
 if (!$isManager) {
-  // Include: own tasks, tasks of assigned employees (district manager), and tasks where user is an attendee.
   if ($isDistrict) {
     $sql .= " WHERE (e.user_id={$uid} OR e.user_id IN (SELECT id FROM users WHERE district_manager_id={$uid})";
     if ($hasEA) $sql .= " OR EXISTS (SELECT 1 FROM event_attendees ea WHERE ea.event_id=e.id AND ea.user_id={$uid})";
@@ -33,6 +33,10 @@ if (!$isManager) {
 }
 
 $res = $mysqli->query($sql);
+if (!$res) {
+  api_error('Unable to load events.', 500, [$mysqli->error ?: 'Query failed']);
+}
+
 $out = [];
 while($r = $res->fetch_assoc()){
   $title = $r['title'] ?: 'Task';
@@ -45,4 +49,4 @@ while($r = $res->fetch_assoc()){
     'allDay'  => (bool)$r['all_day'],
   ];
 }
-echo json_encode($out);
+api_success(['events' => $out], 'Events loaded.');

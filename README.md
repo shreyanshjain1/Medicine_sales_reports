@@ -148,14 +148,6 @@ public/
 - Field-level inline errors so users can fix inputs faster without guessing
 
 
-## Frontend Architecture
-
-The frontend JavaScript is now organized into a small modular structure under `public/assets/js/`:
-
-- `core.js` for shared UI behaviors like confirm prompts and clock rendering
-- `quick-task.js` for Select2-backed city/doctor quick-task behavior
-- `offline-reports.js` for IndexedDB outbox, offline report save, sync, and signature fallback
-- `pwa.js` for service worker registration
-- `app.js` as the lightweight bootstrap entry that initializes registered modules
-
-The PWA cache strategy in `public/sw.js` has also been refreshed to match the restructured routes under `public/reports/` and `public/auth/`.
+## API conventions
+- JSON endpoints now return a consistent envelope: `success`, `message`, `data`, and `errors`.
+- Authenticated API routes should use shared API helpers for method checks, login checks, and permission errors.
