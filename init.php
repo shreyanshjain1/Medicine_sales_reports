@@ -1,6 +1,13 @@
 <?php
 require_once __DIR__ . '/config.php';
-session_start();
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+  session_start();
+}
+
+if (!defined('SESSION_IDLE_TIMEOUT')) define('SESSION_IDLE_TIMEOUT', 30 * 60);
+if (!defined('SESSION_ABSOLUTE_TIMEOUT')) define('SESSION_ABSOLUTE_TIMEOUT', 12 * 60 * 60);
+if (!defined('SESSION_WARNING_BEFORE')) define('SESSION_WARNING_BEFORE', 2 * 60);
 
 $components = __DIR__ . '/app/components/form_components.php';
 if (is_file($components)) require_once $components;
@@ -90,6 +97,16 @@ function ensure_core_schema(): void {
 // Run safe schema migration early
 ensure_core_schema();
 
+function ensure_security_schema(): void {
+  if (!empty($_SESSION['_security_schema_v17'])) return;
+  $_SESSION['_security_schema_v17'] = 1;
+  if (_col_exists('users','id')) {
+    if (!_col_exists('users','last_login_at')) _try_sql("ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL DEFAULT NULL AFTER wants_email_notifications");
+    if (!_col_exists('users','last_login_ip')) _try_sql("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(64) NULL DEFAULT NULL AFTER last_login_at");
+  }
+}
+
+ensure_security_schema();
 
 function ensure_performance_schema(): void {
   if (!empty($_SESSION['_performance_schema_v7'])) return;
@@ -113,52 +130,6 @@ function ensure_performance_schema(): void {
 }
 
 ensure_performance_schema();
-
-
-function ensure_task_workflow_schema(): void {
-  if (!empty($_SESSION['_task_workflow_schema_v16'])) return;
-  $_SESSION['_task_workflow_schema_v16'] = 1;
-
-  if (_col_exists('events','id')) {
-    if (!_col_exists('events','parent_event_id'))   _try_sql("ALTER TABLE events ADD COLUMN parent_event_id INT NULL AFTER user_id");
-    if (!_col_exists('events','status'))            _try_sql("ALTER TABLE events ADD COLUMN status ENUM('planned','in_progress','completed','cancelled','overdue') NOT NULL DEFAULT 'planned' AFTER remarks");
-    if (!_col_exists('events','recurrence_pattern'))_try_sql("ALTER TABLE events ADD COLUMN recurrence_pattern ENUM('none','daily','weekly','monthly') NOT NULL DEFAULT 'none' AFTER status");
-    if (!_col_exists('events','recurrence_until'))  _try_sql("ALTER TABLE events ADD COLUMN recurrence_until DATE NULL AFTER recurrence_pattern");
-    if (!_col_exists('events','recurrence_count'))  _try_sql("ALTER TABLE events ADD COLUMN recurrence_count INT NOT NULL DEFAULT 0 AFTER recurrence_until");
-    _try_sql("ALTER TABLE events ADD INDEX idx_events_status (status)");
-    _try_sql("ALTER TABLE events ADD INDEX idx_events_parent (parent_event_id)");
-  }
-}
-ensure_task_workflow_schema();
-
-function task_status_options(): array {
-  return [
-    'planned' => 'Planned',
-    'in_progress' => 'In Progress',
-    'completed' => 'Completed',
-    'cancelled' => 'Cancelled',
-    'overdue' => 'Overdue',
-  ];
-}
-
-function task_status_badge_class(string $status): string {
-  return match ($status) {
-    'completed' => 'success',
-    'in_progress' => 'warning',
-    'cancelled' => 'danger',
-    'overdue' => 'danger',
-    default => 'info',
-  };
-}
-
-function task_recurrence_options(): array {
-  return [
-    'none' => 'Does not repeat',
-    'daily' => 'Daily',
-    'weekly' => 'Weekly',
-    'monthly' => 'Monthly',
-  ];
-}
 
 function current_target_month(): string {
   return date('Y-m');

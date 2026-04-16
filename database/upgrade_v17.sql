@@ -1,0 +1,3 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS last_login_at DATETIME NULL DEFAULT NULL AFTER wants_email_notifications,
+  ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(64) NULL DEFAULT NULL AFTER last_login_at;

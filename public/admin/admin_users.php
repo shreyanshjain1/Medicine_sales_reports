@@ -32,13 +32,13 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     }
   }
 }
-$users=$mysqli->query("SELECT u.id,u.name,u.email,u.role,u.active,u.created_at, dm.name AS district_manager FROM users u LEFT JOIN users dm ON dm.id = u.district_manager_id ORDER BY FIELD(u.role,'manager','district_manager','employee'), u.name ASC");
+$users=$mysqli->query("SELECT u.id,u.name,u.email,u.role,u.active,u.created_at,u.last_login_at,u.last_login_ip, dm.name AS district_manager FROM users u LEFT JOIN users dm ON dm.id = u.district_manager_id ORDER BY FIELD(u.role,'manager','district_manager','employee'), u.name ASC");
 $title='Users'; include __DIR__.'/../header.php';
 ?>
 <div class="crm-hero"><div><h2>User Management</h2><div class="subtle">Administer rep access, role assignments, and temporary password resets.</div></div><a class="btn primary" href="<?= url('admin/user_add.php') ?>">Add User</a></div>
 <div class="card">
   <?php if($flash): ?><div class="alert success"><?= e($flash) ?><?php if($tempPassword): ?><br><strong>Temporary Password:</strong> <?= e($tempPassword) ?><?php endif; ?></div><?php endif; ?>
-  <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>District Manager</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>
+  <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>District Manager</th><th>Status</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead><tbody>
     <?php while($u=$users->fetch_assoc()): ?>
       <tr>
         <td><?= e($u['name']) ?></td>
@@ -46,7 +46,7 @@ $title='Users'; include __DIR__.'/../header.php';
         <td><?= e($u['role']) ?></td>
         <td><?= e(($u['role']==='employee') ? ($u['district_manager'] ?: '—') : '—') ?></td>
         <td><span class="badge <?= $u['active']?'approved':'needs_changes' ?>"><?= $u['active']?'Active':'Disabled' ?></span></td>
-        <td><?= e((string)$u['created_at']) ?></td>
+        <td><?= !empty($u['last_login_at']) ? e((string)$u['last_login_at']) : '—' ?></td><td><?= e((string)$u['created_at']) ?></td>
         <td>
           <div class="actions-inline">
             <a class="btn tiny" href="<?= url('admin/user_edit.php?id='.(int)$u['id']) ?>">Edit</a>
