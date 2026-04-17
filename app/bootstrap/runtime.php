@@ -29,5 +29,9 @@ if (!function_exists('app_boot_runtime')) {
     if (function_exists('ensure_settings_schema')) {
       ensure_settings_schema();
     }
+
+    if (isset($_SESSION['user']) && function_exists('enforce_runtime_session_policy')) {
+      enforce_runtime_session_policy();
+    }
   }
 }

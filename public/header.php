@@ -19,6 +19,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
 <script>
   window.CSRF_TOKEN = "<?= e(csrf_token()) ?>";
   window.BASE_URL = "<?= e(BASE_URL_EFFECTIVE) ?>";
+  window.APP_SESSION = <?= json_encode(session_warning_data()) ?>;
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('<?= url('sw.js') ?>').catch(()=>{});
@@ -47,7 +48,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
 
 <header class="topbar glass">
   <?php $active = basename($_SERVER['PHP_SELF']); ?>
-  <div class="brand titlecase"><?= e(company_name_value()) ?> · Reporting</div>
+  <div class="brand titlecase"><?= e(company_name_value()) ?> · <?= e(app_name_value()) ?></div>
   <nav class="nav titlecase">
     <a class="<?= $active==='dashboard.php'?'active':'' ?>" href="<?= url('dashboard.php') ?>">Dashboard</a>
     <a class="<?= $active==='reports.php'?'active':'' ?>" href="<?= url('reports/reports.php') ?>">Reports</a>
@@ -74,6 +75,7 @@ $activePage = basename($_SERVER['PHP_SELF'] ?? '');
     </div>
     <div class="muted"><?= e(user()['email']) ?></div>
     <div id="clock" class="clock"></div>
+    <?php if(app_welcome_text()): ?><div class="muted small" style="margin-top:8px"><?= e(app_welcome_text()) ?></div><?php endif; ?>
 
     <div class="muted" style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <span>Offline Queue:</span>
