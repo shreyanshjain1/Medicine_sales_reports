@@ -20,7 +20,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       $subject = app_name_value() . ' · Reset your password';
       $body = 'A password reset was requested for your account. Use the secure link below to set a new password. This link expires at ' . date('M d, Y h:i A', strtotime($token['expires_at'])) . '.';
       $html = notification_email_html('Reset your password', $body, $resetLink);
-      $sent = send_app_mail((string)$u['email'], $subject, $html, $body, 'user', (int)$u['id']);
+      $sent = send_app_mail((string)$u['email'], $subject, $html, $body, 'user', (int)$u['id']); // password reset is treated as a security alert flow
       $mailNotice = $sent ? 'A reset email was sent to the account email.' : 'Email delivery is not active yet, so the reset link is shown below for testing.';
       log_audit('password_reset_requested', 'user', (int)$u['id'], 'Password reset requested');
     }

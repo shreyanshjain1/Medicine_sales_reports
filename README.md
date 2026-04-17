@@ -38,6 +38,9 @@ Medicine Sales CRM is an internal operations platform for field teams. It centra
 ```text
 Medicine_sales_reports-main/
 ├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   ├── workflows/
+│   └── pull_request_template.md
 ├── app/
 │   ├── bootstrap/
 │   ├── components/
@@ -52,6 +55,7 @@ Medicine_sales_reports-main/
 │   ├── install_with_demo_seed.sql
 │   ├── update_latest_bundle.sql
 │   ├── seed_demo.sql
+│   ├── legacy_upgrade_bundle.sql
 │   └── README.md
 ├── public/
 │   ├── admin/
@@ -75,27 +79,24 @@ Medicine_sales_reports-main/
 │   ├── offline.html
 │   ├── setup.php
 │   └── sw.js
-├── scripts/
-│   └── db/
 ├── storage/
+│   └── logs/
 ├── uploads/
+│   ├── attachments/
+│   └── signatures/
 ├── config.example.php
 ├── init.php
 └── README.md
 ```
 
 ## Database layout
-Use these files as the main entry points:
-- `database/schema.sql` — canonical latest schema
-- `database/install_fresh_latest.sql` — generated fresh-install bundle
-- `database/install_with_demo_seed.sql` — generated fresh-install + demo seed bundle
-- `database/update_latest_bundle.sql` — generated upgrade bundle from `database/migrations/`
-
-Supporting files:
-- `database/seed_demo.sql` — demo data only
-- `database/migrations/` — versioned upgrades only
-- `database/archive/` — historical archived SQL only
-- `database/legacy_upgrade_bundle.sql` — deprecated backward-reference file
+This repo now supports a clearer database flow:
+- `database/schema.sql` — main schema source of truth for fresh installs
+- `database/install_fresh_latest.sql` — convenience copy of the latest fresh-install schema
+- `database/install_with_demo_seed.sql` — fresh install plus optional demo seed
+- `database/update_latest_bundle.sql` — one consolidated update bundle for older installs
+- `database/migrations/` — versioned upgrade files kept for patch history
+- `database/archive/` — older archived SQL files kept only for historical reference
 
 ## Setup
 ### Fresh install
@@ -120,18 +121,6 @@ Supporting files:
 3. Import `database/update_latest_bundle.sql`
 4. Keep `config.php` intact
 
-## Database maintenance workflow
-When the schema changes:
-1. update `database/schema.sql`
-2. add a new versioned upgrade file in `database/migrations/`
-3. run:
-
-```bash
-php scripts/db/rebuild_consolidated_sql.php
-```
-
-This regenerates the three convenience SQL entry files so the database folder stays consistent.
-
 ## Architecture notes
 - `init.php` is now a thin bootstrap entry point
 - `app/bootstrap/` loads shared helpers, components, services, repositories, and runtime boot steps
@@ -147,3 +136,11 @@ This regenerates the three convenience SQL entry files so the database folder st
 
 ## Why this version is stronger
 This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, thinner bootstrap flow, more intentional folder structure, consolidated database entry files, and better separation between app code, uploads, and runtime logs.
+
+
+## Notification Preference Enforcement
+- Workflow notifications now pass through a preference-aware helper layer.
+- Review updates respect `notify_review_updates`.
+- Task assignment alerts respect `notify_task_assignments`.
+- Digest-oriented manager flows surface `notify_digest_emails`.
+- Security and password-recovery flows are treated separately from optional workflow mail.

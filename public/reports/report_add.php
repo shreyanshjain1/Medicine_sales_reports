@@ -171,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($draft_id > 0) delete_report_draft($draft_id, $uid);
         $notifyIds = notification_recipient_ids_for_report_owner($uid);
         if ($notifyIds) {
-          notify_many($notifyIds, 'New report submitted', 'A new meeting report from ' . ((string)(user()['name'] ?? 'a representative')) . ' is waiting for review.', 'report_submitted', 'report', $rid, url('reports/report_view.php?id=' . $rid), $uid);
+          notify_many_prefaware($notifyIds, 'New report submitted', 'A new meeting report from ' . ((string)(user()['name'] ?? 'a representative')) . ' is waiting for review.', 'report_submitted', 'report', $rid, url('reports/report_view.php?id=' . $rid), $uid);
         }
         header('Location: ' . url('reports/report_view.php?id=' . $rid));
         exit;

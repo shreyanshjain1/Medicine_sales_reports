@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canReview) {
   $statusLabelMap = ['pending' => 'Pending', 'approved' => 'Approved', 'needs_changes' => 'Needs changes'];
   $body = 'Your report #' . $id . ' was reviewed. New status: ' . ($statusLabelMap[$status] ?? ucfirst($status)) . '.';
   if ($comment !== '') $body .= ' Comment: ' . $comment;
-  notify_user($ownerId, 'Report review update', $body, 'report_review', 'report', $id, url('reports/report_view.php?id=' . $id), (int)(user()['id'] ?? 0));
+  notify_user_prefaware($ownerId, 'Report review update', $body, 'report_review', 'report', $id, url('reports/report_view.php?id=' . $id), (int)(user()['id'] ?? 0));
   $r['status'] = $status; $r['manager_comment'] = $comment;
   $flashSuccess = 'Review updated.';
 }

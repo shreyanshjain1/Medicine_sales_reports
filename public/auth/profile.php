@@ -43,7 +43,7 @@ $title='Profile'; include __DIR__.'/../header.php';
   <form method="post" class="form crm-form max-640"><?php csrf_input(); ?>
     <div class="grid two"><?php render_text_input('Name', 'name', (string)user()['name'], ['required'=>true], $fieldErrors); ?><?php render_text_input('Email', 'email', (string)user()['email'], ['type'=>'email','required'=>true], $fieldErrors); ?></div>
 
-    <div class="section-header" style="margin-top:1rem;"><h3>Email Preferences</h3><p class="subtle">Choose which workflow emails should reach you.</p></div>
+    <div class="section-header" style="margin-top:1rem;"><h3>Email Preferences</h3><p class="subtle">Choose which workflow emails should reach you. Security alerts stay enabled for critical account-recovery flows unless you explicitly turn off security emails.</p></div>
     <?php render_checkbox_input('Enable email notifications for this account', 'wants_email_notifications', user_pref_enabled(user(), 'wants_email_notifications', 1)); ?>
     <?php render_checkbox_input('Report review updates and returned reports', 'notify_review_updates', user_pref_enabled(user(), 'notify_review_updates', 1)); ?>
     <?php render_checkbox_input('Task assignments and visit scheduling alerts', 'notify_task_assignments', user_pref_enabled(user(), 'notify_task_assignments', 1)); ?>

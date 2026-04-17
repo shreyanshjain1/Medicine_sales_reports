@@ -1,0 +1,2 @@
+-- PR 35 notification preference enforcement audit
+-- No schema change required. This marker migration exists to document the preference-enforcement pass.
