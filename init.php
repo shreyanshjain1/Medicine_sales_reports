@@ -21,4 +21,3 @@ require_once __DIR__ . '/app/bootstrap/runtime.php';
 app_bootstrap_files();
 app_boot_runtime();
 
-require_once __DIR__ . '/app/helpers/notification_policy_helpers.php';

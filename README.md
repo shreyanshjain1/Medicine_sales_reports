@@ -151,3 +151,8 @@ This repo now looks more like a maintainable business application instead of a p
 - `public/setup.php` now requires an explicit setup key, environment-safe exposure, and POST confirmation before applying `database/schema.sql`.
 - `public/tools/diagnose.php` requires a manager session, a configured dev-tool key, and environment-safe exposure. Diagnostic output defaults to a summary view and masks user emails.
 - `public/tools/reset_password.php` remains deprecated and returns HTTP 410.
+
+
+## Repo health and API contract
+- API endpoints under `public/api/` use `api_json_success()` and `api_json_error()` wrappers for a consistent JSON contract.
+- CI checks validate helper bootstrap references, include targets, and API contract usage.

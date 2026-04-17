@@ -11,7 +11,7 @@ function map_doctor_columns(mysqli $db): array {
   $res = $db->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'doctors_masterlist'");
   if (!$res) {
-    api_error('Unable to inspect doctors master columns.', 500, [$db->error ?: 'COLUMN lookup failed']);
+    api_json_error('Unable to inspect doctors master columns.', 500, [$db->error ?: 'COLUMN lookup failed']);
   }
 
   $all = [];
@@ -44,7 +44,7 @@ function map_doctor_columns(mysqli $db): array {
   $cols['class']   = $find(['class','Class ( A/B/C )','Tier','Segment']);
 
   if (!$cols['name'] || !$cols['place']) {
-    api_error('Doctors masterlist is missing required columns.', 500, [
+    api_json_error('Doctors masterlist is missing required columns.', 500, [
       'Expected mapped name/place columns.',
       'Detected name=' . (string)$cols['name'] . ', place=' . (string)$cols['place'],
     ]);
@@ -65,7 +65,7 @@ if ($mode === 'cities') {
   $res = api_db_query_or_fail($mysqli, $sql, 'Unable to load city list.');
   $cities = [];
   while ($r = $res->fetch_assoc()) $cities[] = $r['city'];
-  api_success(['cities' => $cities], 'Cities loaded.');
+  api_json_success(['cities' => $cities], 'Cities loaded.');
 }
 
 $city = api_get_string($_GET, 'city', false, 120, 'city');
@@ -86,7 +86,7 @@ if ($city !== '') {
           LIMIT 500";
   $stmt = $mysqli->prepare($sql);
   if (!$stmt) {
-    api_error('Unable to prepare doctors lookup query.', 500, [$mysqli->error ?: 'Prepare failed']);
+    api_json_error('Unable to prepare doctors lookup query.', 500, [$mysqli->error ?: 'Prepare failed']);
   }
   $stmt->bind_param('ss', $city, $city);
   $stmt->execute();
@@ -99,7 +99,7 @@ if ($city !== '') {
     $doctors[] = $r;
   }
   $stmt->close();
-  api_success(['doctors' => $doctors, 'city' => $city], 'Doctors loaded.');
+  api_json_success(['doctors' => $doctors, 'city' => $city], 'Doctors loaded.');
 }
 
-api_error('Bad request.', 400, ['Pass mode=cities or city=<name>.']);
+api_json_error('Bad request.', 400, ['Pass mode=cities or city=<name>.']);

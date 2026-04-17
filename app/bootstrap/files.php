@@ -16,6 +16,8 @@ if (!function_exists('app_bootstrap_files')) {
       'app/helpers/app_helpers.php',
       'app/helpers/db_helpers.php',
       'app/helpers/api_helpers.php',
+      'app/helpers/api_validation_helpers.php',
+      'app/helpers/notification_policy_helpers.php',
       'app/helpers/settings_helpers.php',
       'app/helpers/dev_tool_helpers.php',
       'app/helpers/abuse_protection_helpers.php',
