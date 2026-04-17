@@ -142,3 +142,7 @@ This repo now looks more like a maintainable business application instead of a p
 - Forgot-password requests now use lightweight email/IP throttling.
 - Login now includes an additional per-IP network throttle on top of failed-login checks.
 - Offline report sync batches are rate-limited and capped per request.
+
+
+## Recent UX Polish
+- Report workspace now includes stronger empty states, local autosave controls, clearer review guidance, and a more polished draft/review experience.

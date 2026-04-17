@@ -80,10 +80,24 @@ if (!in_array($st, ['pending', 'approved', 'needs_changes'], true)) $st = 'pendi
   <div><h2>Report #<?= (int)$id ?></h2><div class="subtle">Review submission details, status history, and structured manager feedback.</div></div>
   <div class="actions-inline"><button class="btn" onclick="window.print()">Print / Save as PDF</button><a class="btn" href="<?= e(url('reports/reports.php')) ?>">Back to Reports</a></div>
 </div>
+<?php
+$commentCounts = ['general'=>0,'approval_reason'=>0,'change_request'=>0,'follow_up'=>0];
+foreach ($comments as $commentRow) {
+  $key = (string)($commentRow['comment_type'] ?? 'general');
+  if (!isset($commentCounts[$key])) $commentCounts[$key] = 0;
+  $commentCounts[$key]++;
+}
+?>
 <div class="summary-grid summary-grid-dashboard">
   <?php ui_stat_card('Status', ucfirst(str_replace('_', ' ', $st)), 'Current review state', $st === 'approved' ? 'success' : ($st === 'needs_changes' ? 'warning' : 'default')); ?>
   <?php ui_stat_card('Structured Comments', count($comments), 'Manager feedback entries'); ?>
   <?php ui_stat_card('Timeline Events', count($timeline), 'Status movement history'); ?>
+  <?php ui_stat_card('Change Requests', (int)($commentCounts['change_request'] ?? 0), 'Specific revision requests', ($commentCounts['change_request'] ?? 0) > 0 ? 'warning' : 'default'); ?>
+</div>
+<div class="report-toolbar-strip">
+  <div class="report-toolbar-item"><strong><?= (int)($commentCounts['approval_reason'] ?? 0) ?></strong><span>approval notes logged</span></div>
+  <div class="report-toolbar-item"><strong><?= (int)($commentCounts['follow_up'] ?? 0) ?></strong><span>follow-up reminders logged</span></div>
+  <div class="report-toolbar-item"><strong><?= $canReview ? 'Review enabled' : 'Read only' ?></strong><span><?= $canReview ? 'you can update this report now' : 'viewing current review outcome only' ?></span></div>
 </div>
 <div class="card">
   <?php form_messages([], [], $flashSuccess); ?>
@@ -100,8 +114,8 @@ if (!in_array($st, ['pending', 'approved', 'needs_changes'], true)) $st = 'pendi
   <hr>
   <p><strong>Summary:</strong><br><?= nl2br(e($r['summary'] ?? '')) ?></p>
   <p><strong>Remarks:</strong><br><?= nl2br(e($r['remarks'] ?? '')) ?></p>
-  <?php if (!empty($r['attachment_path'])): ?><p><strong>Attachment:</strong> <a target="_blank" href="<?= e(ATTACH_URL . '/' . basename((string)$r['attachment_path'])) ?>">Download</a></p><?php endif; ?>
-  <?php if (!empty($r['signature_path'])): ?><p><strong>Signature:</strong><br><img style="max-width:420px;background:#fff;padding:6px;border-radius:6px" src="<?= e(SIGNATURE_URL . '/' . basename((string)$r['signature_path'])) ?>"></p><?php endif; ?>
+  <?php if (!empty($r['attachment_path'])): ?><p><strong>Attachment:</strong> <a target="_blank" href="<?= e(attach_url_for((string)$r['attachment_path'])) ?>">Download</a></p><?php endif; ?>
+  <?php if (!empty($r['signature_path'])): ?><p><strong>Signature:</strong><br><img style="max-width:420px;background:#fff;padding:6px;border-radius:6px" src="<?= e(signature_url_for((string)$r['signature_path'])) ?>"></p><?php endif; ?>
 </div>
 
 <div class="card">
@@ -127,7 +141,10 @@ if (!in_array($st, ['pending', 'approved', 'needs_changes'], true)) $st = 'pendi
 <div class="card">
   <?php ui_section_head('Structured Review Comments', 'Reusable feedback trail for reps'); ?>
   <?php if (!$comments): ?>
-    <div class="muted">No structured comments yet.</div>
+    <div class="empty-state-card compact">
+      <h3>No structured comments yet</h3>
+      <p>Use the review workspace below to leave reusable approval reasons, change requests, or follow-up reminders for the rep.</p>
+    </div>
   <?php else: ?>
     <div class="comment-list">
       <?php foreach ($comments as $comment): ?>
@@ -143,6 +160,11 @@ if (!in_array($st, ['pending', 'approved', 'needs_changes'], true)) $st = 'pendi
 <?php if ($canReview): ?>
 <div class="card">
   <?php ui_section_head('Review Workspace', 'Update status and leave structured feedback'); ?>
+  <div class="review-checklist-strip">
+    <div class="check-item">Use <strong>Needs Changes</strong> when something must be updated before approval.</div>
+    <div class="check-item">Use a structured comment so the rep can see exactly what to improve.</div>
+    <div class="check-item">Approval reasons and follow-up notes create a clearer review trail.</div>
+  </div>
   <div class="review-preset-row">
     <button class="btn tiny" type="button" data-comment-template="Doctor meeting details are complete and ready for approval.">Approval ready</button>
     <button class="btn tiny" type="button" data-comment-template="Please expand the summary with doctor reaction, product discussion, and next-step commitment.">Need fuller summary</button>
