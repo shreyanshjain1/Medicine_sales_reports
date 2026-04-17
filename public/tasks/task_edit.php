@@ -218,7 +218,7 @@ $recurrenceOptions = task_recurrence_options();
     docSel.innerHTML = '<option value="">Select Doctor</option>';
     if (!city) return;
     try{
-      const r = await fetch('<?= url('api/api_doctors.php') ?>?city=' + encodeURIComponent(city), {cache:'no-store'});
+      const r = await fetch('<?= api_url('api_doctors.php') ?>?city=' + encodeURIComponent(city), {cache:'no-store'});
       const j = await r.json();
       const list = (j.data && j.data.doctors) ? j.data.doctors : (j.doctors || []);
       list.forEach(d=>{
