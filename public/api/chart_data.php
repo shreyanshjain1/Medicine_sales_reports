@@ -4,7 +4,7 @@ api_require_login();
 api_require_method('GET');
 api_boot();
 
-$mine = isset($_GET['mine']);
+$mine = api_get_bool($_GET, 'mine', false);
 if ($mine) {
   $uid = (int)user()['id'];
   $res = $mysqli->query("SELECT DATE(visit_datetime) d, COUNT(*) c FROM reports WHERE user_id={$uid} GROUP BY d ORDER BY d ASC");

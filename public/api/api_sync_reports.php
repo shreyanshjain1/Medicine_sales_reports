@@ -4,15 +4,9 @@ api_require_login();
 api_require_method('POST');
 api_boot();
 
-$raw = file_get_contents('php://input');
-$payload = json_decode($raw, true);
-if (!is_array($payload)) api_error('Invalid JSON payload.', 400, ['Body must be valid JSON.']);
-
-$token = (string)($payload['_token'] ?? '');
-if ($token === '' || !hash_equals(csrf_token(), $token)) api_error('Invalid CSRF token.', 403, ['CSRF token mismatch.']);
-
-$items = $payload['items'] ?? [];
-if (!is_array($items)) api_error('Invalid items.', 400, ['items must be an array.']);
+$payload = api_read_json_body();
+api_require_post_csrf($payload);
+$items = api_assert_array($payload['items'] ?? null, 'items');
 
 $uid = (int)user()['id'];
 $mysqli->query("CREATE TABLE IF NOT EXISTS report_client_map (

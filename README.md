@@ -138,9 +138,6 @@ This repo now supports a clearer database flow:
 This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, thinner bootstrap flow, more intentional folder structure, consolidated database entry files, and better separation between app code, uploads, and runtime logs.
 
 
-## Notification Preference Enforcement
-- Workflow notifications now pass through a preference-aware helper layer.
-- Review updates respect `notify_review_updates`.
-- Task assignment alerts respect `notify_task_assignments`.
-- Digest-oriented manager flows surface `notify_digest_emails`.
-- Security and password-recovery flows are treated separately from optional workflow mail.
+## API Validation Layer
+- Shared API request validation helpers now live under `app/helpers/api_validation_helpers.php`.
+- Endpoints can use helpers for JSON body parsing, query string validation, CSRF checks, and typed input handling.
