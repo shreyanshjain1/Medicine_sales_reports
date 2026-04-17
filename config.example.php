@@ -15,8 +15,8 @@ const BASE_URL = 'http://localhost/Medicine_sales_reports-main/public';
 
 // Change these secrets before production use.
 const CSRF_SECRET = 'change-this-csrf-secret';
-const SETUP_KEY = 'change-this-setup-key';
-const DEV_TOOL_KEY = 'change-this-dev-tool-key';
+const SETUP_KEY = 'change-this-setup-key';     // must be replaced before enabling setup
+const DEV_TOOL_KEY = 'change-this-dev-tool-key'; // must be replaced before enabling diagnostics
 
 // Security toggles
 const ALLOW_SETUP = false;      // Enable only during first-time installation
