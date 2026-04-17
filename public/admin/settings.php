@@ -5,6 +5,12 @@ $title = 'System Settings';
 $flash=''; $error='';
 $security = app_security_settings();
 $mail = app_mail_summary();
+$devToolStatus = [
+  'setup_allowed' => function_exists('setup_runtime_allowed') ? setup_runtime_allowed() : false,
+  'dev_tools_allowed' => function_exists('can_use_dev_tools') ? can_use_dev_tools() : false,
+  'app_env' => function_exists('app_env_value') ? app_env_value() : 'production',
+  'loopback' => function_exists('request_ip_is_loopback') ? request_ip_is_loopback() : false,
+];
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_verify();
@@ -78,7 +84,7 @@ require_once __DIR__.'/../header.php';
       <label class="chk">
         <input type="checkbox" name="allow_setup_page" value="1" <?= (int)$security['allow_setup_page'] ? 'checked' : '' ?>> Allow setup page toggle in app settings
       </label>
-      <div class="inline-note">These values are stored centrally for operations visibility and future runtime integration. Current hardcoded config values still apply where direct constants are used.</div>
+      <div class="inline-note">These values now influence runtime session policy and setup-page exposure through the shared settings layer. Config values still act as fallbacks where no stored setting exists.</div>
       <div class="actions"><button class="btn primary" type="submit">Save Security Settings</button></div>
     </form>
   </div>
@@ -106,6 +112,17 @@ require_once __DIR__.'/../header.php';
       <li>CODEOWNERS added for future ownership rules</li>
     </ul>
     <div class="inline-note">This PR also improves the GitHub repo itself so contributors have a cleaner path for changes and review.</div>
+  </div>
+
+  <div class="card">
+    <h3>Protected Utility Status</h3>
+    <table class="table compact">
+      <tr><th>Environment</th><td><?= e($devToolStatus['app_env']) ?></td></tr>
+      <tr><th>Loopback request</th><td><?= $devToolStatus['loopback'] ? 'Yes' : 'No' ?></td></tr>
+      <tr><th>Setup page currently usable</th><td><?= $devToolStatus['setup_allowed'] ? 'Yes' : 'No' ?></td></tr>
+      <tr><th>Developer tools currently usable</th><td><?= $devToolStatus['dev_tools_allowed'] ? 'Yes' : 'No' ?></td></tr>
+    </table>
+    <div class="inline-note">Setup and developer utility pages are now gated by both config/settings and environment/key safety checks. Keep them disabled in production whenever possible.</div>
   </div>
 </div>
 

@@ -31,7 +31,6 @@ Medicine Sales CRM is an internal operations platform for field teams. It centra
 - Manager Summary
 - Digest Builder
 - Doctors / Hospitals / Medicines Masters
-- Master-data bulk tools with CSV templates, import summaries, export actions, and duplicate-save guidance
 - Users and Tasks
 - Profile, Password Security, and Settings
 
@@ -147,3 +146,8 @@ This repo now looks more like a maintainable business application instead of a p
 
 ## Recent UX Polish
 - Report workspace now includes stronger empty states, local autosave controls, clearer review guidance, and a more polished draft/review experience.
+
+## Protected setup and developer utilities
+- `public/setup.php` now requires an explicit setup key, environment-safe exposure, and POST confirmation before applying `database/schema.sql`.
+- `public/tools/diagnose.php` requires a manager session, a configured dev-tool key, and environment-safe exposure. Diagnostic output defaults to a summary view and masks user emails.
+- `public/tools/reset_password.php` remains deprecated and returns HTTP 410.
