@@ -30,7 +30,7 @@
               <td><?= e($row['employee']) ?></td>
               <td><?= e($row['doctor_name']) ?></td>
               <td><span class="pill danger"><?= (int)$row['age_hours'] ?>h</span></td>
-              <td><a class="btn tiny" href="report_view.php?id=<?= (int)$row['id'] ?>">Open</a></td>
+              <td><a class="btn tiny" href="<?= e(url('reports/report_view.php?id='.(int)$row['id'])) ?>">Open</a></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -76,7 +76,7 @@
   window.addEventListener('load', () => {
     if (!window.Chart) return;
 
-    fetch('api/chart_data.php')
+    fetch('<?= e(api_url('chart_data.php')) ?>')
       .then(r=>r.json())
       .then(resp=>{
         const d = (resp && resp.data) ? resp.data : {};
@@ -112,7 +112,7 @@
   <script>
   window.addEventListener('load', () => {
     if (!window.Chart) return;
-    fetch('api/chart_data.php?mine=1')
+    fetch('<?= e(api_url('chart_data.php')) ?>?mine=1')
       .then(r=>r.json())
       .then(resp=>{
         const d = (resp && resp.data) ? resp.data : {};
@@ -159,7 +159,7 @@ window.addEventListener('load', async () => {
 
   let eventsRaw = [];
   try {
-    const resp = await fetch('api/api_events.php');
+    const resp = await fetch('<?= e(api_url('api_events.php')) ?>');
     const payload = await resp.json();
     eventsRaw = (payload && payload.data && Array.isArray(payload.data.events)) ? payload.data.events : [];
   } catch (e) {
@@ -203,13 +203,13 @@ window.addEventListener('load', async () => {
     cal.createEvents(eventsV2);
     cal.on('clickEvent', (ev)=>{
       const id = ev?.event?.id ? String(ev.event.id) : '';
-      if (id) window.location = 'task_view.php?id=' + encodeURIComponent(id);
+      if (id) window.location = '<?= e(url('tasks/task_view.php')) ?>?id=' + encodeURIComponent(id);
     });
   } else {
     cal.createSchedules(schedulesV1);
     cal.on('clickSchedule', ({schedule})=>{
       const id = schedule && schedule.id ? String(schedule.id) : '';
-      if (id) window.location = 'task_view.php?id=' + encodeURIComponent(id);
+      if (id) window.location = '<?= e(url('tasks/task_view.php')) ?>?id=' + encodeURIComponent(id);
     });
   }
 

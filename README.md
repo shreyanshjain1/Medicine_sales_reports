@@ -156,3 +156,7 @@ This repo now looks more like a maintainable business application instead of a p
 ## Repo health and API contract
 - API endpoints under `public/api/` use `api_json_success()` and `api_json_error()` wrappers for a consistent JSON contract.
 - CI checks validate helper bootstrap references, include targets, and API contract usage.
+
+
+## Route smoke checks
+- CI now checks for brittle legacy route references so nested pages keep using `url()` and `api_url()` helpers after the folder restructure.

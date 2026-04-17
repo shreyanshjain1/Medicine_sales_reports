@@ -25,3 +25,6 @@ jobs:
 
       - name: API contract smoke check
         run: php scripts/ci/check_api_contract.php
+
+      - name: Route reference smoke check
+        run: php scripts/ci/check_route_references.php
