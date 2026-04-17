@@ -147,19 +147,19 @@ include __DIR__.'/../header.php';
 
 <div class="grid summary-two-col">
   <div class="card">
-    <div class="card-head split"><div><h3>Email Subject</h3><div class="subtle">Use this for manual email sending.</div></div></div>
+    <div class="card-head split"><div><h3>Email Subject</h3><div class="subtle">Email preference for digests: <?= $digestEmailPref ? 'Enabled' : 'Disabled' ?> · Use this for manual email sending.</div></div></div>
     <textarea class="digest-box" readonly><?= e($subject) ?></textarea>
-    <div class="card-head split"><div><h3>Plain Text Digest</h3><div class="subtle">Copy into email, Slack, Teams, or WhatsApp.</div></div></div>
+    <div class="card-head split"><div><h3>Plain Text Digest</h3><div class="subtle">Email preference for digests: <?= $digestEmailPref ? 'Enabled' : 'Disabled' ?> · Copy into email, Slack, Teams, or WhatsApp.</div></div></div>
     <textarea class="digest-box digest-lg" readonly><?= e($plain) ?></textarea>
   </div>
   <div class="card">
-    <div class="card-head split"><div><h3>HTML Digest</h3><div class="subtle">Copy into HTML-capable email tools.</div></div></div>
+    <div class="card-head split"><div><h3>HTML Digest</h3><div class="subtle">Email preference for digests: <?= $digestEmailPref ? 'Enabled' : 'Disabled' ?> · Copy into HTML-capable email tools.</div></div></div>
     <textarea class="digest-box digest-lg" readonly><?= e($html) ?></textarea>
   </div>
 </div>
 
 <div class="card">
-  <div class="card-head split"><div><h3>Included Recent Rows</h3><div class="subtle">Quick reference for what is represented in the digest.</div></div></div>
+  <div class="card-head split"><div><h3>Included Recent Rows</h3><div class="subtle">Email preference for digests: <?= $digestEmailPref ? 'Enabled' : 'Disabled' ?> · Quick reference for what is represented in the digest.</div></div></div>
   <div class="table-wrap">
     <table class="table">
       <thead><tr><th>Employee</th><th>Doctor</th><th>Hospital</th><th>Visit</th><th>Status</th></tr></thead>
