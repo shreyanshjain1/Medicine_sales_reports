@@ -137,8 +137,12 @@ This repo now supports a clearer database flow:
 ## Why this version is stronger
 This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, thinner bootstrap flow, more intentional folder structure, consolidated database entry files, and better separation between app code, uploads, and runtime logs.
 
+## CI & Repository Checks
 
-## Latest Admin Security Workflow
-- Admins can now create users through an invite-style onboarding flow.
-- Invite onboarding marks the account for a required password setup/change on first login.
-- Managers can also regenerate invite links or require password change on next sign-in.
+The repo now includes lightweight GitHub Actions checks for:
+- PHP syntax linting
+- repo structure and cleanup validation
+- include/require smoke checks for missing file references
+- API contract smoke checks for standardized JSON helpers
+
+These checks are intentionally lightweight so the project stays easy to maintain on a plain PHP/MySQL stack while still catching common regression issues early.
