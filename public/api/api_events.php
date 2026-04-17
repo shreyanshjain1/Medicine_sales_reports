@@ -21,13 +21,13 @@ $to = api_get_string($_GET, 'to', false, 25, 'to');
 $dateWhere = '';
 if ($from !== '') {
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
-    api_error('Validation failed.', 422, ['from must be in YYYY-MM-DD format.']);
+    api_json_error('Validation failed.', 422, ['from must be in YYYY-MM-DD format.']);
   }
   $dateWhere .= " AND DATE(e.start) >= '".$mysqli->real_escape_string($from)."'";
 }
 if ($to !== '') {
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
-    api_error('Validation failed.', 422, ['to must be in YYYY-MM-DD format.']);
+    api_json_error('Validation failed.', 422, ['to must be in YYYY-MM-DD format.']);
   }
   $dateWhere .= " AND DATE(e.start) <= '".$mysqli->real_escape_string($to)."'";
 }
@@ -53,7 +53,7 @@ $sql .= $dateWhere;
 
 $res = $mysqli->query($sql);
 if (!$res) {
-  api_error('Unable to load events.', 500, [$mysqli->error ?: 'Query failed']);
+  api_json_error('Unable to load events.', 500, [$mysqli->error ?: 'Query failed']);
 }
 
 $out = [];
@@ -68,4 +68,4 @@ while($r = $res->fetch_assoc()){
     'allDay'  => (bool)$r['all_day'],
   ];
 }
-api_success(['events' => $out], 'Events loaded.');
+api_json_success(['events' => $out], 'Events loaded.');

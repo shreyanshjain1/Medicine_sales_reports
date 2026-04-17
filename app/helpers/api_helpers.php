@@ -58,3 +58,16 @@ function api_db_query_or_fail(mysqli $db, string $sql, string $message = 'Databa
     }
     return $res;
 }
+
+
+function api_json_payload(bool $success, string $message = '', array $data = [], array $errors = []): array {
+    return api_payload($success, $message, $data, $errors);
+}
+
+function api_json_success(array $data = [], string $message = 'OK', int $status = 200): void {
+    api_success($data, $message, $status);
+}
+
+function api_json_error(string $message = 'Bad Request', int $status = 400, array $errors = []): void {
+    api_error($message, $status, $errors);
+}
