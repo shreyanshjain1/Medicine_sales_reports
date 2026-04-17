@@ -189,6 +189,11 @@ include __DIR__.'/../header.php';
   <div><h2>Add Meeting Report</h2><div class="subtle">Create a full submission or save work as a draft for later.</div></div>
   <div class="actions-inline"><a class="btn" href="<?= e(url('reports/reports.php')) ?>">Back to Reports</a></div>
 </div>
+<div class="report-toolbar-strip">
+  <div class="report-toolbar-item"><strong><?= $draftLoaded ? 'Draft Resume' : 'New Submission' ?></strong><span><?= $draftLoaded ? 'Loaded from saved draft' : 'Fresh report workspace' ?></span></div>
+  <div class="report-toolbar-item"><strong id="localAutosaveState">Local autosave idle</strong><span id="localAutosaveStamp">No local backup detected</span></div>
+  <div class="report-toolbar-item"><strong>Checklist</strong><span>Doctor + visit time + summary = strongest submission</span></div>
+</div>
 <div class="summary-grid summary-grid-dashboard">
   <?php ui_stat_card('My Drafts', count($draftRows), 'Saved personal drafts'); ?>
   <?php ui_stat_card('Mode', $draftLoaded ? 'Draft Resume' : 'New Report', $draftLoaded ? 'Editing draft #'.(int)$draftLoaded['id'] : 'Fresh submission'); ?>
@@ -218,6 +223,16 @@ include __DIR__.'/../header.php';
   </div>
   <?php endif; ?>
 
+  <div class="draft-restore-strip" id="localDraftTools">
+    <div>
+      <strong>Browser backup tools</strong>
+      <div class="muted">Use these if you want to restore or discard your last local autosave before saving a server draft.</div>
+    </div>
+    <div class="actions-inline">
+      <button class="btn tiny" type="button" id="restoreLocalDraft">Restore Browser Backup</button>
+      <button class="btn tiny" type="button" id="discardLocalDraft">Discard Browser Backup</button>
+    </div>
+  </div>
   <form method="post" class="form crm-form" id="reportForm" enctype="multipart/form-data">
     <?php csrf_input(); ?>
     <input type="hidden" name="draft_id" value="<?= (int)$draft_id ?>">
@@ -246,6 +261,11 @@ include __DIR__.'/../header.php';
       <small class="field-hint">Optional: capture a quick signature before final submission.</small>
     </div>
 
+    <div class="submission-checklist">
+      <div class="check-item">Doctor name and visit date are required.</div>
+      <div class="check-item">Summary quality warnings will appear before final submission.</div>
+      <div class="check-item">Attachments and signature are optional, but useful for stronger review context.</div>
+    </div>
     <div class="form-actions actions-inline">
       <button class="btn" type="submit" name="submit_intent" value="save_draft">Save Draft</button>
       <button class="btn primary" type="submit" name="submit_intent" value="submit">Submit Report</button>
@@ -256,11 +276,20 @@ include __DIR__.'/../header.php';
 (function(){
   const form = document.getElementById('reportForm');
   const draftKey = 'medsales_report_draft_add';
+  const autosaveState = document.getElementById('localAutosaveState');
+  const autosaveStamp = document.getElementById('localAutosaveStamp');
+  const restoreBtn = document.getElementById('restoreLocalDraft');
+  const discardBtn = document.getElementById('discardLocalDraft');
   const fields = ['doctor_name','doctor_email','purpose','medicine_name','hospital_name','visit_datetime','summary','remarks'];
+  const updateAutosaveMeta = (label, meta) => {
+    if (autosaveState) autosaveState.textContent = label;
+    if (autosaveStamp) autosaveStamp.textContent = meta;
+  };
   if (form) {
     if (!form.querySelector('[name="draft_id"]').value) {
       try {
         const saved = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        if (saved && saved._saved_at) updateAutosaveMeta('Browser backup ready', 'Saved ' + saved._saved_at);
         fields.forEach(name => {
           const el = form.querySelector('[name="'+name+'"]');
           if (el && !el.value && typeof saved[name] === 'string') el.value = saved[name];
@@ -273,8 +302,22 @@ include __DIR__.'/../header.php';
         const el = form.querySelector('[name="'+name+'"]');
         if (el) payload[name] = el.value || '';
       });
-      try { localStorage.setItem(draftKey, JSON.stringify(payload)); } catch(e){}
+      payload._saved_at = new Date().toLocaleString();
+      try { localStorage.setItem(draftKey, JSON.stringify(payload)); updateAutosaveMeta('Autosave active', 'Saved ' + payload._saved_at); } catch(e){}
     };
+    if (restoreBtn) restoreBtn.addEventListener('click', function(){
+      try {
+        const saved = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        fields.forEach(name => {
+          const el = form.querySelector('[name=+name+]');
+          if (el && typeof saved[name] === 'string') el.value = saved[name];
+        });
+        if (saved && saved._saved_at) updateAutosaveMeta('Browser backup restored', 'Saved ' + saved._saved_at);
+      } catch(e){}
+    });
+    if (discardBtn) discardBtn.addEventListener('click', function(){
+      try { localStorage.removeItem(draftKey); updateAutosaveMeta('Browser backup cleared', 'No local backup detected'); } catch(e){}
+    });
     fields.forEach(name => {
       const el = form.querySelector('[name="'+name+'"]');
       if (el) el.addEventListener('input', saveLocal);
@@ -282,7 +325,7 @@ include __DIR__.'/../header.php';
     form.addEventListener('submit', function(){
       const intent = document.activeElement && document.activeElement.value;
       if (intent === 'submit') {
-        try { localStorage.removeItem(draftKey); } catch(e){}
+        try { localStorage.removeItem(draftKey); updateAutosaveMeta('Browser backup cleared', 'Submitted reports clear local autosave'); } catch(e){}
       } else {
         saveLocal();
       }

@@ -54,6 +54,11 @@ $title='Reports'; include __DIR__.'/../header.php';
 <?php if($isManager || $isDistrict): ?><a class="btn" href="<?= url('admin/approvals.php') ?>">Open Approval Queue</a><?php endif; ?>
 <a class="btn" href="<?= url('reports/report_add.php') ?>">Create Report</a>
 <?php $reportsHeroActions = ob_get_clean(); ui_page_hero('Reports', 'Filter, review, and manage field submissions in one CRM-style workspace.', $reportsHeroActions); ?>
+<div class="report-toolbar-strip">
+  <div class="report-toolbar-item"><strong><?= (int)$total ?></strong><span>results in current filtered view</span></div>
+  <div class="report-toolbar-item"><strong><?= count($draftRows) ?></strong><span>drafts ready to resume</span></div>
+  <div class="report-toolbar-item"><strong><?= e(ucfirst($status === 'all' ? 'all statuses' : str_replace('_', ' ', $status))) ?></strong><span>current status filter</span></div>
+</div>
 <div class="summary-grid summary-grid-dashboard">
   <?php ui_stat_card('Total Results', (int)$total, 'Current filtered dataset'); ?>
   <?php ui_stat_card('Pending', (int)($stats['pending_count'] ?? 0), 'Awaiting review', 'warning'); ?>
@@ -109,7 +114,16 @@ $title='Reports'; include __DIR__.'/../header.php';
       <thead><tr><?php if($isManager || $isDistrict): ?><th>Employee</th><?php endif; ?><th>Doctor</th><th>Purpose</th><th>Medicine</th><th>Hospital</th><th>Visit</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
       <?php $colspan = ($isManager || $isDistrict) ? 8 : 7; ?>
-      <?php if(!count($rows)): ?><tr><td colspan="<?= $colspan ?>" class="muted">No reports found.</td></tr><?php else: foreach($rows as $r): ?>
+      <?php if(!count($rows)): ?><tr><td colspan="<?= $colspan ?>" class="table-empty-cell">
+        <div class="empty-state-card compact">
+          <h3>No reports found</h3>
+          <p>Try widening your filters, clearing the keyword search, or create a new report.</p>
+          <div class="actions-inline">
+            <a class="btn" href="<?= e(url('reports/reports.php')) ?>">Clear Filters</a>
+            <a class="btn primary" href="<?= e(url('reports/report_add.php')) ?>">Create Report</a>
+          </div>
+        </div>
+      </td></tr><?php else: foreach($rows as $r): ?>
         <tr>
           <?php if($isManager || $isDistrict): ?><td><?= e($r['employee'] ?: '—') ?></td><?php endif; ?>
           <td><strong><?= e($r['doctor_name']) ?></strong><br><small class="muted"><?= e($r['doctor_email']) ?></small></td>
@@ -118,7 +132,7 @@ $title='Reports'; include __DIR__.'/../header.php';
           <td><?= e($r['hospital_name']) ?></td>
           <td><?= $r['visit_datetime'] ? e(date('Y-m-d H:i', strtotime($r['visit_datetime']))) : '—' ?></td>
           <td><?= ui_badge((string)($r['status'] ?: 'pending'), (string)($r['status'] ?: 'pending')) ?></td>
-          <td><div class="actions-inline"><a class="btn tiny" href="report_view.php?id=<?= (int)$r['id'] ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="report_edit.php?id=<?= (int)$r['id'] ?>">Edit</a><?php endif; ?></div></td>
+          <td><div class="actions-inline"><a class="btn tiny" href="<?= e(url('reports/report_view.php?id='.(int)$r['id'])) ?>">View</a><?php if(!is_manager() && ($r['status']??'')!=='approved'): ?><a class="btn tiny" href="<?= e(url('reports/report_edit.php?id='.(int)$r['id'])) ?>">Edit</a><?php endif; ?></div></td>
         </tr>
       <?php endforeach; endif; ?>
       </tbody>

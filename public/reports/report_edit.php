@@ -56,6 +56,11 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 $title='Edit Report #'.$id; include __DIR__.'/../header.php';
 ?>
 <div class="crm-hero"><div><h2>Edit Report #<?= (int)$r['id'] ?></h2><div class="subtle">Refine visit details before final approval.</div></div></div>
+<div class="report-toolbar-strip">
+  <div class="report-toolbar-item"><strong><?= e(ucfirst(str_replace('_', ' ', (string)($r['status'] ?: 'pending')))) ?></strong><span>Current review status</span></div>
+  <div class="report-toolbar-item"><strong><?= count($draftRows) ?></strong><span>recent draft copies available</span></div>
+  <div class="report-toolbar-item"><strong>Edit carefully</strong><span>saving changes returns this report to pending review</span></div>
+</div>
 <div class="card">
   <?php form_messages($errors, $warnings, $draftSaved ? 'Draft copy saved.' : ($ok ? 'Report updated.' : '')); ?>
   <?php if($duplicates): ?><div class="alert warning"><strong>Possible duplicate reports found</strong><?php foreach($duplicates as $dup) echo '<div>Report #'.(int)$dup['id'].' · '.e((string)$dup['doctor_name']).' · '.e((string)$dup['visit_datetime']).' · '.e((string)($dup['status'] ?: 'pending')).'</div>'; ?></div><?php endif; ?>
@@ -82,10 +87,11 @@ $title='Edit Report #'.$id; include __DIR__.'/../header.php';
     <datalist id="hospital_master_list"><?php foreach($hospitalOptions as $opt): ?><option value="<?= e($opt['label']) ?>"></option><?php endforeach; ?></datalist>
     <?php render_textarea_input('Summary', 'summary', (string)$r['summary'], ['rows'=>4,'placeholder'=>'Key discussion points'], $fieldErrors); ?>
     <?php render_textarea_input('Remarks', 'remarks', (string)$r['remarks'], ['rows'=>3,'placeholder'=>'Follow-ups, commitments, or notes'], $fieldErrors); ?>
+    <div class="info-inline-note">Saving changes on a non-approved report keeps the workflow clean by sending the updated record back through review.</div>
     <p>Current Status: <span class="badge <?= e($r['status'] ?: 'pending') ?>"><?= e($r['status'] ?: 'pending') ?></span></p>
-    <?php if(!empty($r['attachment_path'])): ?><p>Attachment: <a target="_blank" href="<?= e(ATTACH_URL.'/'.basename((string)$r['attachment_path'])) ?>">Download current attachment</a></p><?php endif; ?>
+    <?php if(!empty($r['attachment_path'])): ?><p>Attachment: <a target="_blank" href="<?= e(attach_url_for((string)$r['attachment_path'])) ?>">Download current attachment</a></p><?php endif; ?>
     <label class="form-field"><span class="form-label">Replace / Add Attachment</span><input class="form-control" type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png"><small class="field-hint">Allowed: PDF, JPG, JPEG, PNG</small></label>
-    <div class="actions-inline form-actions"><button class="btn" type="submit" name="submit_intent" value="save_draft">Save Draft Copy</button><button class="btn primary" type="submit" name="submit_intent" value="save">Save Changes</button><a class="btn" href="report_view.php?id=<?= (int)$r['id'] ?>">Back</a></div>
+    <div class="actions-inline form-actions"><button class="btn" type="submit" name="submit_intent" value="save_draft">Save Draft Copy</button><button class="btn primary" type="submit" name="submit_intent" value="save">Save Changes</button><a class="btn" href="<?= e(url('reports/report_view.php?id='.(int)$r['id'])) ?>">Back</a></div>
   </form>
 </div>
 <script>
