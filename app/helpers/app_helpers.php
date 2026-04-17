@@ -9,7 +9,7 @@ if (!function_exists('user')) {
   function user(){ return $_SESSION['user'] ?? null; }
 }
 if (!function_exists('require_login')) {
-  function require_login(){ if(!is_logged_in()){ header('Location: '.url('index.php')); exit; } }
+  function require_login(){ $expired = function_exists('enforce_runtime_session_policy') ? enforce_runtime_session_policy() : null; if($expired){ $reason = $expired === 'absolute' ? 'expired' : 'idle'; header('Location: '.url('index.php?session=' . $reason)); exit; } if(!is_logged_in()){ header('Location: '.url('index.php')); exit; } }
 }
 if (!function_exists('require_manager')) {
   function require_manager(){ if(!is_logged_in() || !is_manager()){ http_response_code(403); exit('Forbidden'); } }
