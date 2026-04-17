@@ -6,11 +6,6 @@ $info='';
 if(isset($_GET['reset']) && $_GET['reset']==='success'){
   $info='Password updated successfully. Please sign in with your new password.';
 }
-if(isset($_GET['session'])){
-  $info = $_GET['session']==='expired'
-    ? 'Your session reached its maximum lifetime. Please sign in again.'
-    : 'Your session timed out due to inactivity. Please sign in again.';
-}
 if($_SERVER['REQUEST_METHOD']==='POST'){
   csrf_verify();
   $email=normalize_email(trim(post('email','')));
@@ -20,15 +15,18 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $mins=max(1,(int)ceil($retryAfter/60));
     $error='Too many failed login attempts. Try again in about '.$mins.' minute(s).';
   } else {
-    $stmt=$mysqli->prepare('SELECT id,name,email,password_hash,role,active,wants_email_notifications FROM users WHERE email=? LIMIT 1');
+    $stmt=$mysqli->prepare('SELECT id,name,email,password_hash,role,active,wants_email_notifications,force_password_change FROM users WHERE email=? LIMIT 1');
     $stmt->bind_param('s',$email);
     $stmt->execute();
     $res=$stmt->get_result();
     if($u=$res->fetch_assoc()){
       if((int)$u['active'] === 1 && password_verify($pass,$u['password_hash'])){
-        initialize_login_session($u);
+        app_login_user($u);
         record_login_attempt($email, true);
         log_audit('login_success', 'user', (int)$u['id'], 'Successful sign in');
+        if ((int)($u['force_password_change'] ?? 0) === 1) {
+          header('Location: '.url('auth/change_password.php?required=1')); exit;
+        }
         header('Location: '.url('dashboard.php')); exit;
       }
     }
@@ -45,7 +43,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     <div class="card login-card">
       <h1 class="logo"><?= e(company_name_value()) ?></h1>
       <h2 class="subtitle"><?= e(app_name_value()) ?></h2>
-      <?php if(app_welcome_text()): ?><p class="subtitle" style="margin-top:.35rem"><?= e(app_welcome_text()) ?></p><?php endif; ?>
       <?php if($info): ?><div class="alert success"><?= e($info) ?></div><?php endif; ?>
       <?php if($error): ?><div class="alert"><?= e($error) ?></div><?php endif; ?>
       <form method="post" class="form compact">
