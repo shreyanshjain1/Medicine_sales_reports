@@ -15,6 +15,23 @@ $sql = "SELECT e.id,e.title,e.city,e.doctor_id,
         FROM events e
         LEFT JOIN doctors_masterlist d ON d.id=e.doctor_id";
 
+
+$from = api_get_string($_GET, 'from', false, 25, 'from');
+$to = api_get_string($_GET, 'to', false, 25, 'to');
+$dateWhere = '';
+if ($from !== '') {
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
+    api_error('Validation failed.', 422, ['from must be in YYYY-MM-DD format.']);
+  }
+  $dateWhere .= " AND DATE(e.start) >= '".$mysqli->real_escape_string($from)."'";
+}
+if ($to !== '') {
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+    api_error('Validation failed.', 422, ['to must be in YYYY-MM-DD format.']);
+  }
+  $dateWhere .= " AND DATE(e.start) <= '".$mysqli->real_escape_string($to)."'";
+}
+
 $hasEA = false;
 if ($r = $mysqli->query("SHOW TABLES LIKE 'event_attendees'")) {
   $hasEA = ($r->num_rows > 0);
@@ -31,6 +48,8 @@ if (!$isManager) {
     $sql .= ")";
   }
 }
+
+$sql .= $dateWhere;
 
 $res = $mysqli->query($sql);
 if (!$res) {

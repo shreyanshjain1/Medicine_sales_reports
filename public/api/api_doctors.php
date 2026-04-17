@@ -55,7 +55,7 @@ function map_doctor_columns(mysqli $db): array {
 $cols = map_doctor_columns($mysqli);
 $T = 'doctors_masterlist';
 $cn = fn($k) => '`'.$cols[$k].'`';
-$mode = trim((string)($_GET['mode'] ?? ''));
+$mode = api_get_string($_GET, 'mode', false, 20, 'mode');
 
 if ($mode === 'cities') {
   $sql = "SELECT DISTINCT TRIM({$cn('place')}) AS city
@@ -68,7 +68,7 @@ if ($mode === 'cities') {
   api_success(['cities' => $cities], 'Cities loaded.');
 }
 
-$city = trim((string)($_GET['city'] ?? ''));
+$city = api_get_string($_GET, 'city', false, 120, 'city');
 if ($city !== '') {
   $sql = "SELECT
             ".($cols['id']   ? $cn('id').' AS id,' : 'NULL AS id,')."
