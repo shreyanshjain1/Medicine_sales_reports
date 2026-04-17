@@ -1,45 +1,67 @@
-# Database files
+# Database folder
 
-## Primary entry files
-These are the only SQL files most people should care about:
+This folder is intentionally organized around **three main entry points** and two supporting subfolders.
 
-- `schema.sql` — **canonical source of truth** for the latest schema.
-- `install_fresh_latest.sql` — generated convenience copy for fresh installs.
-- `install_with_demo_seed.sql` — generated fresh install plus demo seed.
-- `update_latest_bundle.sql` — generated bundled update path for older installs.
+## Use these files
 
-## Supporting files
-- `seed_demo.sql` — demo/test data only.
-- `migrations/upgrade_v*.sql` — versioned migration history.
-- `archive/` — older archived SQL that is no longer part of the main install path.
-- `legacy_upgrade_bundle.sql` — deprecated legacy bundle kept only for backward reference.
-
-## Recommended usage
-### Fresh install
-Import `install_fresh_latest.sql`
-
-### Demo or local install
-Import `install_with_demo_seed.sql`
-
-### Existing install upgrade
-Back up the database first, then apply `update_latest_bundle.sql`
-
-## Canonical workflow for future updates
-1. Update `schema.sql` when the latest full schema changes.
-2. Add a new versioned migration under `migrations/` for incremental upgrades.
-3. Run:
-
-```bash
-php scripts/db/rebuild_consolidated_sql.php
-```
-
-That regenerates:
+### 1) Fresh install
 - `install_fresh_latest.sql`
-- `install_with_demo_seed.sql`
-- `update_latest_bundle.sql`
+- Best for a brand-new production or staging database.
 
-## Cleanup direction
-To keep this folder clean over time:
-- do **not** add new `upgrade_v*.sql` files to the database root
-- keep versioned upgrades only under `database/migrations/`
-- keep `legacy_upgrade_bundle.sql` only until you no longer need backward-reference compatibility
+### 2) Fresh install with demo data
+- `install_with_demo_seed.sql`
+- Best for local demos, screenshots, and testing sample flows.
+
+### 3) Existing database upgrade
+- `update_latest_bundle.sql`
+- Best for upgrading an older database after taking a backup.
+
+## Canonical source files
+- `schema.sql` — the latest full schema and the real source of truth.
+- `seed_demo.sql` — optional demo/test seed data only.
+
+## Supporting folders
+- `migrations/` — versioned incremental upgrades that are still relevant to the current maintained history.
+- `archive/` — older historical SQL kept only for reference and rollback research.
+
+## Recommended workflow
+
+### Fresh production install
+Import `install_fresh_latest.sql`.
+
+### Fresh demo/local install
+Import `install_with_demo_seed.sql`.
+
+### Upgrade an existing install
+1. Back up the database.
+2. Review `migrations/` if you want the granular history.
+3. Apply `update_latest_bundle.sql`.
+
+## Maintenance rules
+- Update `schema.sql` whenever the latest full schema changes.
+- Add each new incremental update under `migrations/` only.
+- Regenerate the bundled install/update files after schema or migration changes.
+- Do not add new `upgrade_v*.sql` files to the database root.
+- Keep `archive/` for old reference material only.
+
+## Folder summary
+
+```text
+.database/
+  README.md
+  schema.sql
+  seed_demo.sql
+  install_fresh_latest.sql
+  install_with_demo_seed.sql
+  update_latest_bundle.sql
+  migrations/
+    README.md
+    upgrade_v13.sql
+    ...
+  archive/
+    README.md
+    full_schema.sql
+    legacy_upgrade_bundle.sql
+    upgrade_v2.sql
+    ...
+```
