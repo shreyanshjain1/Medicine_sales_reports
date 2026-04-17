@@ -14,11 +14,6 @@ CREATE TABLE IF NOT EXISTS users (
   district_manager_id INT NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
   wants_email_notifications TINYINT(1) NOT NULL DEFAULT 1,
-  force_password_change TINYINT(1) NOT NULL DEFAULT 0,
-  invited_at DATETIME NULL DEFAULT NULL,
-  invite_expires_at DATETIME NULL DEFAULT NULL,
-  password_changed_at DATETIME NULL DEFAULT NULL,
-  first_login_at DATETIME NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_users_active_role (active, role),
   KEY idx_users_district_manager (district_manager_id),
@@ -165,6 +160,17 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   was_successful TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_login_attempts_email_ip (email, ip_address, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS rate_limit_hits (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  scope VARCHAR(80) NOT NULL,
+  identifier VARCHAR(191) NOT NULL,
+  ip_address VARCHAR(64) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_rate_limit_scope_identifier (scope, identifier, created_at),
+  KEY idx_rate_limit_scope_ip (scope, ip_address, created_at),
+  KEY idx_rate_limit_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

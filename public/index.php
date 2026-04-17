@@ -11,26 +11,29 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   $email=normalize_email(trim(post('email','')));
   $pass=(string)post('password','');
   $retryAfter=0;
-  if(login_is_locked($email, $retryAfter)){
+  $ipRetryAfter=0;
+  $ipIdentifier = client_ip_address();
+  if(abuse_rate_limit_check('login_ip', $ipIdentifier, 15, 900, $ipRetryAfter)){
+    $mins=max(1,(int)ceil($ipRetryAfter/60));
+    $error='Too many sign-in attempts from this network. Try again in about '.$mins.' minute(s).';
+  } elseif(login_is_locked($email, $retryAfter)){
     $mins=max(1,(int)ceil($retryAfter/60));
     $error='Too many failed login attempts. Try again in about '.$mins.' minute(s).';
   } else {
-    $stmt=$mysqli->prepare('SELECT id,name,email,password_hash,role,active,wants_email_notifications,force_password_change FROM users WHERE email=? LIMIT 1');
+    $stmt=$mysqli->prepare('SELECT id,name,email,password_hash,role,active,wants_email_notifications FROM users WHERE email=? LIMIT 1');
     $stmt->bind_param('s',$email);
     $stmt->execute();
     $res=$stmt->get_result();
     if($u=$res->fetch_assoc()){
       if((int)$u['active'] === 1 && password_verify($pass,$u['password_hash'])){
-        app_login_user($u);
+        $_SESSION['user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role'=>role_norm($u['role']),'wants_email_notifications'=>(int)($u['wants_email_notifications'] ?? 1)];
         record_login_attempt($email, true);
         log_audit('login_success', 'user', (int)$u['id'], 'Successful sign in');
-        if ((int)($u['force_password_change'] ?? 0) === 1) {
-          header('Location: '.url('auth/change_password.php?required=1')); exit;
-        }
         header('Location: '.url('dashboard.php')); exit;
       }
     }
     record_login_attempt($email, false);
+    abuse_rate_limit_hit('login_ip', $ipIdentifier);
     $error='Invalid email or password';
   }
 }

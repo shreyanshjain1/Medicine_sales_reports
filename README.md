@@ -138,6 +138,7 @@ This repo now supports a clearer database flow:
 This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, thinner bootstrap flow, more intentional folder structure, consolidated database entry files, and better separation between app code, uploads, and runtime logs.
 
 
-## API Validation Layer
-- Shared API request validation helpers now live under `app/helpers/api_validation_helpers.php`.
-- Endpoints can use helpers for JSON body parsing, query string validation, CSRF checks, and typed input handling.
+## Abuse protection
+- Forgot-password requests now use lightweight email/IP throttling.
+- Login now includes an additional per-IP network throttle on top of failed-login checks.
+- Offline report sync batches are rate-limited and capped per request.

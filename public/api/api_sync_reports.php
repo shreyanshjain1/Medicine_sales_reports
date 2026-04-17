@@ -4,11 +4,24 @@ api_require_login();
 api_require_method('POST');
 api_boot();
 
-$payload = api_read_json_body();
-api_require_post_csrf($payload);
-$items = api_assert_array($payload['items'] ?? null, 'items');
+$raw = file_get_contents('php://input');
+$payload = json_decode($raw, true);
+if (!is_array($payload)) api_error('Invalid JSON payload.', 400, ['Body must be valid JSON.']);
+
+$token = (string)($payload['_token'] ?? '');
+if ($token === '' || !hash_equals(csrf_token(), $token)) api_error('Invalid CSRF token.', 403, ['CSRF token mismatch.']);
+
+$items = $payload['items'] ?? [];
+if (!is_array($items)) api_error('Invalid items.', 400, ['items must be an array.']);
+if (count($items) > 50) api_error('Sync batch too large.', 422, ['Send at most 50 reports per sync request.']);
+abuse_rate_limit_hit('api_sync_reports', abuse_identifier_for_user($uid));
 
 $uid = (int)user()['id'];
+$retryAfter = 0;
+if (abuse_rate_limit_check('api_sync_reports', abuse_identifier_for_user($uid), 12, 300, $retryAfter)) {
+  api_error('Too many sync requests.', 429, ['Please wait before trying to sync again.']);
+}
+
 $mysqli->query("CREATE TABLE IF NOT EXISTS report_client_map (
   client_uuid VARCHAR(64) PRIMARY KEY,
   report_id INT NOT NULL,
