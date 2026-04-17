@@ -31,6 +31,7 @@ Medicine Sales CRM is an internal operations platform for field teams. It centra
 - Manager Summary
 - Digest Builder
 - Doctors / Hospitals / Medicines Masters
+- Master-data bulk tools with CSV templates, import summaries, export actions, and duplicate-save guidance
 - Users and Tasks
 - Profile, Password Security, and Settings
 
