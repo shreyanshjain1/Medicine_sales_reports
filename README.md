@@ -109,34 +109,6 @@ This repo now supports a clearer database flow:
    - `storage/logs`
 5. Open `public/`
 
-### Demo / local test install
-1. Copy `config.example.php` to `config.php`
-2. Set your database credentials and secrets
-3. Import `database/install_with_demo_seed.sql`
-4. Open `public/`
-
-### Existing install
-1. Back up your current database and files
-2. Copy in the updated project files
-3. Import `database/update_latest_bundle.sql`
-4. Keep `config.php` intact
-
-## Architecture notes
-- `init.php` is now a thin bootstrap entry point
-- `app/bootstrap/` loads shared helpers, components, services, repositories, and runtime boot steps
-- `app/helpers/` holds cross-cutting app helpers
-- `app/services/` holds business-logic helpers for larger modules
-- `app/repositories/` holds schema/bootstrap persistence helpers
-- the app bootstraps missing `uploads/` and `storage/` folders automatically on startup
-
-## Notes
-- `setup.php` should only be enabled intentionally in controlled environments
-- runtime logs belong in `storage/logs/`, not in tracked public files
-- `public/assets/style.patch.css` is obsolete after the design-system consolidation and should not be kept
-
-## Why this version is stronger
-This repo now looks more like a maintainable business application instead of a patch-stacked demo: cleaner install path, thinner bootstrap flow, more intentional folder structure, consolidated database entry files, and better separation between app code, uploads, and runtime logs.
-
 
 ## Abuse protection
 - Forgot-password requests now use lightweight email/IP throttling.
