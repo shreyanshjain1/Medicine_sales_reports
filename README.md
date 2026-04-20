@@ -116,9 +116,6 @@ This repo now supports a clearer database flow:
 - Offline report sync batches are rate-limited and capped per request.
 
 
-## Recent UX Polish
-- Report workspace now includes stronger empty states, local autosave controls, clearer review guidance, and a more polished draft/review experience.
-
 ## Protected setup and developer utilities
 - `public/setup.php` now requires an explicit setup key, environment-safe exposure, and POST confirmation before applying `database/schema.sql`.
 - `public/tools/diagnose.php` requires a manager session, a configured dev-tool key, and environment-safe exposure. Diagnostic output defaults to a summary view and masks user emails.
